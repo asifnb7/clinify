@@ -1,7 +1,19 @@
+# OS / Editor junk
 .DS_Store
-*.pyc
-*.egg-info
 *.swp
+*.bak
 tags
-node_modules
-__pycache__
+
+# Python
+*.pyc
+__pycache__/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Environment / secrets
+.env
+
+# Clinify backups
+hooks_backup.py
