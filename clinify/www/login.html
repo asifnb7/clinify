@@ -1,0 +1,258 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+
+<div class="clinify-login-wrapper">
+
+    <!-- TOP NAVBAR -->
+
+    <div class="clinify-topbar">
+
+        <div class="clinify-logo-area">
+
+            <img src="/assets/clinify/images/clinify-logo.png" class="clinify-logo">
+
+            <div>
+
+                <h2>CLINIFY</h2>
+
+                <p>Healthcare, Simplified.</p>
+
+            </div>
+
+        </div>
+
+        <div class="clinify-nav-links">
+
+<a href="/about">About us</a>
+
+<a href="/products">Our products</a>
+
+<a href="/for-clinics">For clinics</a>
+
+<a href="/contact">Contact</a>
+
+
+            <button class="demo-btn" onclick="openDemoPopup()">
+Book a demo
+
+</button>        
+
+</div>
+
+    </div>
+
+    <!-- HERO -->
+
+    <div class="clinify-hero">
+
+        <div>
+
+            <h1>Smarter healthcare, for every clinic.</h1>
+
+            <p>Patient management, billing, and AI tools — all in one place.</p>
+
+        </div>
+
+        <div class="hero-tags">
+
+            <span>AI-powered</span>
+
+            <span>Cloud-ready</span>
+
+            <span>Clinic-friendly</span>
+
+        </div>
+
+    </div>
+
+    <!-- MAIN CONTENT -->
+
+    <div class="clinify-main">
+
+        <!-- LEFT PRODUCTS -->
+
+        <div class="clinify-products">
+
+            <h3>OUR PRODUCTS</h3>
+
+            <div class="product-card">
+
+                <h4>Clinify EMR</h4>
+
+                <p>Digital patient records, history and clinical workflows.</p>
+
+            </div>
+
+            <div class="product-card">
+
+                <h4>CareScheduler</h4>
+
+                <p>Smart appointments and doctor availability management.</p>
+
+            </div>
+
+            <div class="product-card">
+
+                <h4>BillFlow</h4>
+
+                <p>Insurance claims and billing simplified.</p>
+
+            </div>
+
+            <div class="product-card">
+
+                <h4>Clinify Insights</h4>
+
+                <p>Analytics and AI reports on patient outcomes.</p>
+
+            </div>
+
+        </div>
+
+        <!-- LOGIN CARD -->
+
+        <div class="clinify-login-panel">
+
+            <div class="clinify-login-card">
+
+                <img src="/assets/clinify/images/clinify-logo.png" class="login-card-logo">
+
+                <h2>Welcome back</h2>
+
+                <p>Sign in to your Clinify account</p>
+
+<form class="form-signin" method="POST" action="/api/method/login">
+
+    <input type="text"
+           class="form-control"
+           name="usr"
+           placeholder="doctor@clinic.com"
+           required>
+
+    <br>
+
+    <input type="password"
+           class="form-control"
+           name="pwd"
+           placeholder="Password"
+           required>
+
+    <br>
+
+    <button class="btn btn-primary btn-login btn-block"
+            type="submit">
+
+        Sign in to Clinify
+
+    </button>
+
+</form>
+
+<div class="login-links">
+
+    <a href="/update-password">Forgot password?</a>
+
+    <a href="#">Get support</a>
+
+</div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- FOOTER -->
+
+    <div class="clinify-footer">
+
+        <div>© 2026 Clinify Health Technologies Pvt. Ltd.</div>
+
+        <div class="footer-links">
+
+            <a href="#">Privacy policy</a>
+
+            <a href="#">Terms of use</a>
+
+            <a href="#">Support</a>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- DEMO POPUP -->
+
+<div id="demoPopup" class="demo-popup">
+
+<div class="demo-box">
+
+<h2>Book a Demo</h2>
+
+<input placeholder="Name">
+
+<input placeholder="Clinic Name">
+
+<select>
+
+<option>Select City</option>
+
+<option>Mumbai</option>
+
+<option>Delhi</option>
+
+<option>Bangalore</option>
+
+<option>Hyderabad</option>
+
+<option>Chennai</option>
+
+<option>Kolkata</option>
+
+<option>Srinagar</option>
+
+<option>Ahmedabad</option>
+
+</select>
+
+<input placeholder="Phone Number">
+
+<button>
+
+Submit
+
+</button>
+
+<span onclick="closeDemoPopup()">
+
+✕
+
+</span>
+
+</div>
+
+</div>
+
+<script>
+
+function openDemoPopup(){
+
+document.getElementById(
+'demoPopup'
+).style.display='flex';
+
+}
+
+function closeDemoPopup(){
+
+document.getElementById(
+'demoPopup'
+).style.display='none';
+
+}
+
+</script>
+
+{% endblock %}

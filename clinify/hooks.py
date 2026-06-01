@@ -54,3 +54,7 @@ app_license = "mit"
 # No unsafe overrides here
 override_whitelisted_methods = {}
 
+app_include_css = "/assets/clinify/theme/css/clinify-theme.css"
+
+#app_include_js = "/assets/clinify/js/clinify_login.js"
+web_include_css = "/assets/clinify/css/clinify-login.css"

@@ -1,0 +1,73 @@
+/* ===== CLINIFY PREMIUM LOGIN ===== */
+
+body.for-login {
+    background: linear-gradient(135deg, #0B5ED7 0%, #1E88E5 100%) !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+body.for-login .login-content {
+    background: transparent !important;
+}
+
+body.for-login .page-card {
+    background: rgba(255,255,255,0.98) !important;
+    border-radius: 22px !important;
+    border: none !important;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.18) !important;
+    overflow: hidden !important;
+    padding: 28px !important;
+}
+
+body.for-login .page-card-head {
+    text-align: center !important;
+    margin-bottom: 25px !important;
+}
+
+body.for-login .page-card-head img {
+    max-height: 85px !important;
+    margin: 0 auto 12px auto !important;
+}
+
+body.for-login .page-card-head::after {
+    content: "Healthcare, Simplified.";
+    display: block;
+    color: #6B7280;
+    font-size: 13px;
+    letter-spacing: 1.2px;
+    margin-top: 8px;
+}
+
+body.for-login .form-control {
+    height: 46px !important;
+    border-radius: 12px !important;
+    border: 1px solid #D6DFEA !important;
+    box-shadow: none !important;
+}
+
+body.for-login .form-control:focus {
+    border-color: #0B5ED7 !important;
+    box-shadow: 0 0 0 4px rgba(11,94,215,0.15) !important;
+}
+
+body.for-login .btn-primary {
+    background: #0B5ED7 !important;
+    border: none !important;
+    border-radius: 12px !important;
+    height: 46px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+}
+
+body.for-login .btn-primary:hover {
+    background: #1E88E5 !important;
+}
+
+body.for-login .invalid-login {
+    border-radius: 10px !important;
+}
+
+body.for-login footer,
+body.for-login .footer-powered,
+body.for-login .page-footer {
+    display: none !important;
+}

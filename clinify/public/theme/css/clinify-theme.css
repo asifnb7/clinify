@@ -1,0 +1,119 @@
+/* ========================================== */
+/* CLINIFY CLEAN HEALTHCARE THEME */
+/* ========================================== */
+
+/* LEFT SIDEBAR */
+
+.layout-side-section,
+.standard-sidebar,
+.list-sidebar {
+
+    background: #0B5ED7 !important;
+}
+
+/* SIDEBAR TEXT */
+
+.layout-side-section a,
+.standard-sidebar a,
+.list-sidebar a,
+
+.layout-side-section .sidebar-item-label,
+.standard-sidebar .sidebar-item-label,
+.list-sidebar .sidebar-item-label {
+
+    color: #FFFFFF !important;
+}
+
+/* SIDEBAR ICONS */
+
+.layout-side-section svg,
+.standard-sidebar svg,
+.list-sidebar svg {
+
+    fill: #FFFFFF !important;
+
+    color: #FFFFFF !important;
+}
+
+/* ACTIVE MENU ITEM */
+
+.standard-sidebar-item.selected,
+.layout-side-section .selected {
+
+    background: rgba(255,255,255,0.14) !important;
+
+    border-radius: 12px !important;
+}
+
+/* PRIMARY BUTTONS */
+
+.btn-primary {
+
+    background: #0B5ED7 !important;
+
+    border-color: #0B5ED7 !important;
+
+    color: #FFFFFF !important;
+}
+
+/* FILTERS / ACTIVE CONTROLS */
+
+.filter-selector .btn,
+.list-row-head .btn,
+.page-head .btn-primary {
+
+    background: #0B5ED7 !important;
+
+    color: #FFFFFF !important;
+
+    border: none !important;
+}
+
+/* KEEP FORMS CLEAN & READABLE */
+
+.form-section,
+.form-dashboard,
+.card,
+.widget,
+.layout-main-section,
+.page-form,
+.frappe-control,
+.form-control {
+
+    background: #FFFFFF !important;
+
+    color: #212529 !important;
+}
+
+/* FORM LABELS */
+
+.form-section label,
+.control-label,
+.form-control,
+.widget-head,
+.section-head {
+
+    color: #212529 !important;
+}
+
+/* INPUT FIELDS */
+
+input,
+textarea,
+select {
+
+    background: #FFFFFF !important;
+
+    color: #212529 !important;
+
+    border: 1px solid #ced4da !important;
+}
+
+/* PAGE CONTENT */
+
+.layout-main,
+.page-container,
+.page-body {
+
+    background: #F5F7FA !important;
+}
