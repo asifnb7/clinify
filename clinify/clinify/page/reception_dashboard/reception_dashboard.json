@@ -1,0 +1,19 @@
+{
+ "content": null,
+ "creation": "2026-06-27 13:14:04.294161",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-06-27 13:14:04.294161",
+ "modified_by": "Administrator",
+ "module": "Clinify",
+ "name": "reception-dashboard",
+ "owner": "Administrator",
+ "page_name": "reception-dashboard",
+ "roles": [],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Reception Dashboard"
+}
