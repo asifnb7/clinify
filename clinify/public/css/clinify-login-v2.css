@@ -1,0 +1,276 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+
+body{
+    margin:0;
+    padding:0;
+    font-family:'Nunito',sans-serif;
+    background:#EEF3F8 !important;
+}
+
+.navbar,
+footer,
+.web-footer,
+.footer-powered{
+    display:none !important;
+}
+
+.page-content-wrapper,
+.page-content,
+.container,
+main.container{
+    width:100% !important;
+    max-width:100% !important;
+    padding:0 !important;
+    margin:0 !important;
+}
+
+.clinify-login-wrapper{
+    min-height:100vh;
+}
+
+/* HEADER */
+
+.clinify-topbar{
+    background:#1478BE;
+    color:#fff;
+    padding:20px 40px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.clinify-logo-area{
+    display:flex;
+    align-items:center;
+    gap:15px;
+}
+
+.clinify-logo{
+    width:80px;
+    height:auto;
+}
+
+.clinify-logo-area h2{
+    margin:0;
+    color:#fff;
+}
+
+.clinify-logo-area p{
+    margin:0;
+    color:#CFE8F8;
+}
+
+.clinify-nav-links{
+    display:flex;
+    align-items:center;
+    gap:25px;
+}
+
+.clinify-nav-links a{
+    color:#fff;
+    text-decoration:none;
+    font-weight:600;
+}
+
+.demo-btn{
+    background:#fff;
+    color:#1478BE;
+    border:none;
+    border-radius:25px;
+    padding:12px 20px;
+    font-weight:700;
+}
+
+/* HERO */
+
+.clinify-hero{
+    background:#0d5f9e;
+    color:#fff;
+    padding:40px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.clinify-hero h1{
+    margin:0;
+}
+
+.hero-tags{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.hero-tags span{
+    border:1px solid rgba(255,255,255,.4);
+    padding:8px 14px;
+    border-radius:20px;
+}
+
+/* MAIN */
+
+.clinify-main{
+    display:flex;
+    gap:50px;
+    padding:40px;
+}
+
+.clinify-products{
+    flex:1;
+}
+
+.product-card{
+    background:#fff;
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:15px;
+    border:1px solid #D8E5F2;
+}
+
+.clinify-login-panel{
+    flex:1;
+}
+
+.clinify-login-card{
+    background:#fff;
+    border-radius:16px;
+    padding:30px;
+    border:1px solid #D8E5F2;
+}
+
+.login-card-logo{
+    width:180px;
+    display:block;
+    margin:auto;
+}
+
+.form-control{
+    width:100%;
+    min-height:50px;
+    border-radius:10px;
+}
+
+.btn-login{
+    width:100%;
+    min-height:52px;
+    background:#1478BE !important;
+    color:#fff !important;
+    border:none !important;
+    border-radius:10px;
+}
+
+.login-links{
+    display:flex;
+    justify-content:space-between;
+    margin-top:15px;
+}
+
+.login-links a{
+    text-decoration:none;
+}
+
+/* FOOTER */
+
+.clinify-footer{
+    background:#0d5f9e;
+    color:#fff;
+    padding:20px 40px;
+    display:flex;
+    justify-content:space-between;
+}
+
+.footer-links{
+    display:flex;
+    gap:20px;
+}
+
+.footer-links a{
+    color:#fff;
+    text-decoration:none;
+}
+
+/* POPUP */
+
+.demo-popup{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+}
+
+.demo-box{
+    background:#fff;
+    width:420px;
+    max-width:90%;
+    padding:25px;
+    border-radius:14px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+
+/* MOBILE */
+
+@media (max-width:768px){
+
+    .clinify-topbar{
+        flex-direction:column;
+        text-align:center;
+        gap:20px;
+    }
+
+    .clinify-logo-area{
+        flex-direction:column;
+    }
+
+    .clinify-nav-links{
+        flex-direction:column;
+        width:100%;
+    }
+
+    .demo-btn{
+        width:100%;
+    }
+
+    .clinify-hero{
+        flex-direction:column;
+        text-align:center;
+        gap:20px;
+        padding:25px;
+    }
+
+    .clinify-main{
+        flex-direction:column;
+        padding:20px;
+    }
+
+    .clinify-products,
+    .clinify-login-panel{
+        width:100%;
+    }
+
+    .clinify-login-card{
+        padding:20px;
+    }
+
+    .clinify-footer{
+        flex-direction:column;
+        gap:15px;
+        text-align:center;
+    }
+
+    .footer-links{
+        justify-content:center;
+        flex-wrap:wrap;
+    }
+
+    .login-links{
+        flex-direction:column;
+        gap:10px;
+        text-align:center;
+    }
+}

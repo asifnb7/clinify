@@ -1,0 +1,189 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+
+/* ==========================================
+   GLOBAL
+========================================== */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+    font-family: 'Nunito', sans-serif;
+    background: #EEF3F8;
+}
+
+.navbar,
+.web-footer,
+footer,
+.footer-powered {
+    display: none !important;
+}
+
+.page-content-wrapper,
+.page-content,
+.container,
+main.container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* ==========================================
+   MAIN WRAPPER
+========================================== */
+
+.clinify-login-wrapper {
+    width: 100%;
+    min-height: 100vh;
+    background: #EEF3F8;
+}
+
+/* ==========================================
+   TOP BAR
+========================================== */
+
+.clinify-topbar {
+    background: #1478BE;
+    color: white;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 20px 40px;
+}
+
+.clinify-logo-area {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.clinify-logo {
+    width: 85px;
+    height: auto;
+}
+
+.clinify-logo-area h2 {
+    margin: 0;
+    font-size: 42px;
+    font-weight: 700;
+    color: white;
+}
+
+.clinify-logo-area p {
+    margin: 0;
+    font-size: 18px;
+    color: #9DD4F0;
+}
+
+.clinify-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.clinify-nav-links a {
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.demo-btn {
+    background: white;
+    color: #1478BE;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* ==========================================
+   HERO
+========================================== */
+
+.clinify-hero {
+    background: #0F66A8;
+    color: white;
+
+    padding: 70px 40px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 30px;
+}
+
+.clinify-hero h1 {
+    margin: 0 0 15px;
+    font-size: 56px;
+    line-height: 1.15;
+}
+
+.clinify-hero p {
+    margin: 0;
+    font-size: 20px;
+    max-width: 650px;
+}
+
+.hero-tags {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.hero-tags span {
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    padding: 10px 18px;
+}
+
+/* ==========================================
+   MOBILE
+========================================== */
+
+@media screen and (max-width: 768px) {
+
+    .clinify-topbar {
+        flex-direction: column;
+        text-align: center;
+        gap: 20px;
+        padding: 20px;
+    }
+
+    .clinify-logo-area {
+        flex-direction: column;
+    }
+
+    .clinify-logo-area h2 {
+        font-size: 32px;
+    }
+
+    .clinify-nav-links {
+        flex-direction: column;
+        width: 100%;
+        gap: 15px;
+    }
+
+    .clinify-hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .clinify-hero h1 {
+        font-size: 38px;
+    }
+
+    .clinify-hero p {
+        font-size: 18px;
+    }
+
+    .hero-tags {
+        justify-content: center;
+    }
+}

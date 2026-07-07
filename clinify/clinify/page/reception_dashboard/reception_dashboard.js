@@ -58,15 +58,36 @@ frappe.call({
 
             r.message.forEach(function (appt) {
 
-                html += `
-                    <div class="border-bottom py-2">
-                        <strong>${appt.patient_name}</strong><br>
-${appt.appointment_time} • ${appt.status}
+  html += `
+    <div class="border-bottom py-3">
 
-                                            </div>
-                `;
+        <strong>${appt.patient_name}</strong><br>
 
-            });
+        ${appt.appointment_time} • ${appt.status}<br>
+
+        Reception:
+        <strong>${appt.custom_reception_status || "Waiting"}</strong>
+
+        <br><br>
+
+        ${
+            (appt.custom_reception_status || "Waiting") === "Checked In"
+            ?
+            `<button class="btn btn-success btn-sm" disabled>
+                ✓ Checked In
+            </button>`
+            :
+            `<button
+                class="btn btn-primary btn-sm check-in-btn"
+                data-appointment="${appt.name}">
+                Check In
+            </button>`
+        }
+
+    </div>
+`;
+
+           });
 
         }
 
@@ -105,3 +126,18 @@ frappe.call({
 });
 
 };
+$(document).on("click", ".check-in-btn", function () {
+
+    const appointment = $(this).data("appointment");
+
+    frappe.call({
+        method: "clinify.reception.check_in_patient",
+        args: {
+            appointment: appointment
+        },
+        callback: function () {
+            frappe.set_route("reception-dashboard");
+        }
+    });
+
+});
