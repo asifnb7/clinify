@@ -61,12 +61,46 @@ frappe.call({
   html += `
     <div class="border-bottom py-3">
 
-        <strong>${appt.patient_name}</strong><br>
+        
+        
+<div class="d-flex justify-content-between">
 
-        ${appt.appointment_time} • ${appt.status}<br>
+    <div>
 
-        Reception:
-        <strong>${appt.custom_reception_status || "Waiting"}</strong>
+<strong>${appt.patient_name}</strong><br>
+
+<small class="text-muted">
+    Dr. ${appt.doctor_name || "-"}
+</small>
+<br>
+
+${appt.appointment_time}
+
+<br>
+
+<span class="badge"
+      style="background:${appt.journey_color};
+             color:white;">
+
+    ${appt.journey_label}
+
+</span>
+    </div>
+
+    <div>
+
+        <button
+            class="btn btn-outline-secondary btn-sm patient-btn"
+            data-patient="${appt.patient}">
+
+            Patient
+
+        </button>
+
+    </div>
+
+</div>
+
 
         <br><br>
 
@@ -139,5 +173,17 @@ $(document).on("click", ".check-in-btn", function () {
             frappe.set_route("reception-dashboard");
         }
     });
+
+});
+
+$(document).on("click", ".patient-btn", function () {
+
+    const patient = $(this).data("patient");
+
+    frappe.set_route(
+        "Form",
+        "Patient",
+        patient
+    );
 
 });
