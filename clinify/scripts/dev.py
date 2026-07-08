@@ -39,6 +39,10 @@ def patient_journey(appointment):
             "label": "Billing",
             "color": "purple",
         },
+"Ready for Billing": {
+    "label": "Ready for Billing",
+    "color": "purple",
+},
         "Completed": {
             "label": "Completed",
             "color": "gray",

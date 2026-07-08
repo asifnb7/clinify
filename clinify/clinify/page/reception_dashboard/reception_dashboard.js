@@ -61,8 +61,6 @@ frappe.call({
   html += `
     <div class="border-bottom py-3">
 
-        
-        
 <div class="d-flex justify-content-between">
 
     <div>
@@ -143,14 +141,41 @@ frappe.call({
 
             r.message.forEach(function (bill) {
 
-                html += `
-                    <div class="border-bottom py-2">
-                        <strong>${bill.customer_name}</strong><br>
-                        ₹${bill.outstanding_amount} • ${bill.status}
-                    </div>
-                `;
+html += `
+    <div class="border-bottom py-3">
 
-            });
+        <strong>${bill.customer_name}</strong>
+
+        <br>
+
+        <small class="text-muted">
+            Dr. ${bill.doctor_name || "-"}
+        </small>
+
+        <br>
+
+        <strong>
+            ₹${bill.outstanding_amount}
+        </strong>
+
+        <span class="badge badge-warning">
+            ${bill.status}
+        </span>
+
+        <br><br>
+
+        <button
+            class="btn btn-sm btn-primary view-invoice-btn"
+            data-invoice="${bill.name}">
+
+            View Invoice
+
+        </button>
+
+    </div>
+`;
+
+});
 
         }
 
@@ -184,6 +209,18 @@ $(document).on("click", ".patient-btn", function () {
         "Form",
         "Patient",
         patient
+    );
+
+});
+
+$(document).on("click", ".view-invoice-btn", function () {
+
+    const invoice = $(this).data("invoice");
+
+    frappe.set_route(
+        "Form",
+        "Sales Invoice",
+        invoice
     );
 
 });
