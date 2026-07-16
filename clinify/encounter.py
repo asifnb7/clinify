@@ -29,6 +29,33 @@ def _get_or_create_treatment_plan(doc):
     return plan.name
 
 
+def _append_planned_procedure(doc, plan_name):
+    """Append one planned procedure row to the Dental Treatment Plan."""
+
+    if not plan_name:
+        return
+
+    try:
+        plan = frappe.get_doc("Dental Treatment Plan", plan_name)
+    except Exception:
+        return
+
+    if any(
+        getattr(row, "linked_encounter", None) == doc.name
+        for row in getattr(plan, "dental_planned_procedures", [])
+    ):
+        return
+
+    plan.append("dental_planned_procedures", {
+        "procedure_type": "Other",
+        "tooth_number": doc.custom_tooth_area,
+        "tooth_surface": "O",
+        "planned_status": "Completed",
+        "linked_encounter": doc.name,
+    })
+    plan.save(ignore_permissions=True)
+
+
 def after_save(doc, method=None):
     """
     When a Dental Patient Encounter is saved, create or reuse a
@@ -46,6 +73,8 @@ def after_save(doc, method=None):
     plan_name = _get_or_create_treatment_plan(doc)
     if not plan_name:
         return
+
+    _append_planned_procedure(doc, plan_name)
 
     current_status = frappe.db.get_value(
         "Patient Appointment",
