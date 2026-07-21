@@ -58,7 +58,7 @@ def get_billing_queue():
 
     invoices = frappe.get_all(
         "Sales Invoice",
-        filters={"docstatus": 1},
+        filters={"docstatus": ["!=", 2]},
         fields=[
             "name",
             "customer_name",
@@ -90,12 +90,20 @@ def get_billing_queue():
             p["name"]: p["practitioner_name"]
             for p in practitioners
         }
-
     for invoice in invoices:
 
         invoice["paid_amount"] = (
             invoice["grand_total"] - invoice["outstanding_amount"]
         )
+
+        if invoice["status"] == "Draft":
+            invoice["workflow_stage"] = "Draft"
+
+        elif invoice["outstanding_amount"] > 0:
+            invoice["workflow_stage"] = "Pending Payment"
+
+        else:
+            invoice["workflow_stage"] = "Completed"
 
         invoice["doctor_name"] = doctor_lookup.get(
             invoice.get("custom_primary_doctor"),
@@ -103,7 +111,6 @@ def get_billing_queue():
         )
 
     return invoices
-
 
 @frappe.whitelist()
 def check_in_patient(appointment):
