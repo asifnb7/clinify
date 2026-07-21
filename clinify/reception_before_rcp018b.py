@@ -136,14 +136,12 @@ def get_ready_for_billing():
 
     appointments = frappe.get_all(
         "Patient Appointment",
-    
- filters={
-    "appointment_date": nowdate(),
-    "custom_reception_status": "Billing",
-    "docstatus": ["!=", 2],
-    "ref_sales_invoice": ["in", ["", None]],
-},
-
+        filters={
+            "appointment_date": nowdate(),
+            "custom_reception_status": "Ready for Billing",
+            "docstatus": ["!=", 2],
+            "ref_sales_invoice": ["in", ["", None]],
+        },
         fields=[
             "name",
             "patient",

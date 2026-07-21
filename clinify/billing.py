@@ -52,10 +52,13 @@ def create_invoice_from_dental_plan(plan_name):
         )
 
     invoice.insert(ignore_permissions=True)
-    invoice.submit()
+
+    # Leave the invoice in Draft.
+    # Reception will review, edit and submit manually.
 
     # Mark procedure as billed
     for row in rows:
+
         frappe.db.set_value(
             "Dental Planned Procedure",
             row.name,

@@ -61,6 +61,7 @@ web_include_css = "/assets/clinify/css/clinify-login.css"
 
 doc_events = {
     "Patient Encounter": {
+        "before_insert": "clinify.encounter.before_insert",
         "on_update": "clinify.encounter.after_save"
     }
 }

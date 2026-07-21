@@ -28,7 +28,6 @@ def _get_or_create_treatment_plan(doc):
 
     return plan.name
 
-
 def _append_planned_procedure(doc, plan_name):
     """Append one planned procedure row to the Dental Treatment Plan."""
 
@@ -40,21 +39,31 @@ def _append_planned_procedure(doc, plan_name):
     except Exception:
         return
 
+    # Prevent duplicate rows for the same Encounter
     if any(
         getattr(row, "linked_encounter", None) == doc.name
         for row in getattr(plan, "dental_planned_procedures", [])
     ):
         return
 
-    plan.append("dental_planned_procedures", {
-        "procedure_type": "Other",
-        "tooth_number": doc.custom_tooth_area,
-        "tooth_surface": "O",
-        "planned_status": "Completed",
-        "linked_encounter": doc.name,
-    })
-    plan.save(ignore_permissions=True)
+    # Procedure Type is mandatory
+    if not getattr(doc, "custom_procedure_type", None):
+        frappe.throw(
+            "Please select a Procedure Type before saving the Encounter."
+        )
 
+    plan.append(
+        "dental_planned_procedures",
+        {
+            "procedure_type": doc.custom_procedure_type,
+            "tooth_number": doc.custom_tooth_area,
+            "tooth_surface": "O",
+            "planned_status": "Completed",
+            "linked_encounter": doc.name,
+        },
+    )
+
+    plan.save(ignore_permissions=True)
 
 def after_save(doc, method=None):
     """
@@ -81,18 +90,16 @@ def after_save(doc, method=None):
         doc.appointment,
         "custom_reception_status"
     )
-
-    if current_status == "Ready for Billing":
+    if current_status == "Billing":
         return
 
     frappe.db.set_value(
         "Patient Appointment",
         doc.appointment,
         "custom_reception_status",
-        "Ready for Billing",
+        "Billing",
         update_modified=False,
     )
-
 
 def before_insert(doc, method=None):
     """
