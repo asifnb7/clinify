@@ -4,12 +4,204 @@ frappe.pages["reception-dashboard"].on_page_load = function(wrapper) {
 
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: "Reception Dashboard",
         single_column: true
     });
 
+    const quickActions = [
+        {
+            label: "Book Appointment",
+            icon: "fa-calendar",
+            theme: "appointment",
+            buttonClass: "quick-action-book-appointment-btn"
+        },
+        {
+            label: "Patient",
+            icon: "fa-user",
+            theme: "patient",
+            buttonClass: "quick-action-patient-btn"
+        },
+        {
+            label: "Yesterday",
+            icon: "fa-history",
+            theme: "yesterday",
+            buttonClass: "quick-action-yesterday-btn"
+        },
+        {
+            label: "Tomorrow",
+            icon: "fa-calendar",
+            theme: "tomorrow",
+            buttonClass: "quick-action-tomorrow-btn"
+        },
+        {
+            label: "Doctor",
+            icon: "fa-user-md",
+            theme: "doctor",
+            buttonClass: "quick-action-doctor-btn"
+        },
+        {
+            label: "Accounts",
+            icon: "fa-money",
+            theme: "accounts",
+            buttonClass: "quick-action-accounts-btn"
+        }
+    ];
+
     $(page.body).html(`
-        <div class="container-fluid">
+        <div class="container-fluid reception-dashboard">
+            <style>
+                .reception-dashboard {
+                    margin-top: -0.75rem;
+                }
+
+                .reception-dashboard .quick-actions-container {
+                    display: flex;
+                    flex-wrap: nowrap;
+                    gap: 1.25rem;
+                }
+
+                .reception-dashboard .quick-action-item {
+                    flex: 1 1 0;
+                    min-width: 0;
+                }
+
+                .reception-dashboard .quick-action-card {
+                    align-items: center;
+                    background: #ffffff;
+                    border: 1px solid #edf0f3;
+                    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
+                    color: inherit;
+                    cursor: pointer;
+                    display: flex;
+                    justify-content: center;
+                    min-height: 112px;
+                    padding: 0.5rem 1rem;
+                    text-align: center;
+                    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+                    width: 100%;
+                }
+
+                .reception-dashboard .quick-action-card:hover,
+                .reception-dashboard .quick-action-card:focus {
+                    background: #fcfdff;
+                    border-color: rgba(13, 110, 253, 0.25);
+                    box-shadow: 0 0.75rem 1.5rem rgba(16, 24, 40, 0.1);
+                    outline: none;
+                    transform: translateY(-3px);
+                }
+
+                .reception-dashboard .quick-action-icon-circle {
+                    align-items: center;
+                    border-radius: 50%;
+                    display: flex;
+                    height: 72px;
+                    justify-content: center;
+                    margin-bottom: 0.25rem;
+                    width: 72px;
+                }
+
+                .reception-dashboard .quick-action-icon {
+                    font-size: 36px;
+                }
+
+                .reception-dashboard .quick-action-label {
+                    font-size: 0.9rem;
+                    font-weight: 700;
+                }
+
+                .reception-dashboard .quick-action-card--appointment .quick-action-icon-circle {
+                    background: #fff3cd;
+                }
+
+                .reception-dashboard .quick-action-card--appointment .quick-action-icon {
+                    color: #856404;
+                }
+
+                .reception-dashboard .quick-action-card--patient .quick-action-icon-circle,
+                .reception-dashboard .quick-action-card--yesterday .quick-action-icon-circle,
+                .reception-dashboard .quick-action-card--tomorrow .quick-action-icon-circle {
+                    background: rgba(13, 110, 253, 0.1);
+                }
+
+                .reception-dashboard .quick-action-card--patient .quick-action-icon,
+                .reception-dashboard .quick-action-card--yesterday .quick-action-icon,
+                .reception-dashboard .quick-action-card--tomorrow .quick-action-icon {
+                    color: var(--primary, #0d6efd);
+                }
+
+                .reception-dashboard .quick-action-card--doctor .quick-action-icon-circle {
+                    background: rgba(25, 135, 84, 0.1);
+                }
+
+                .reception-dashboard .quick-action-card--doctor .quick-action-icon {
+                    color: #198754;
+                }
+
+                .reception-dashboard .quick-action-card--accounts .quick-action-icon-circle {
+                    background: rgba(253, 126, 20, 0.12);
+                }
+
+                .reception-dashboard .quick-action-card--accounts .quick-action-icon {
+                    color: #fd7e14;
+                }
+
+                @media (max-width: 991.98px) {
+                    .reception-dashboard .quick-actions-container {
+                        flex-wrap: wrap;
+                    }
+
+                    .reception-dashboard .quick-action-item {
+                        flex: 1 1 30%;
+                        min-width: 150px;
+                    }
+                }
+
+                .reception-dashboard .reception-dashboard-header {
+                    background: var(--blue-600, #007be0);
+                    color: #fff;
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 1.5rem;
+                    min-height: 84px;
+                    padding: 1.5rem;
+                }
+
+                .reception-dashboard .reception-dashboard-header h3 {
+                    color: #fff;
+                    margin: 0;
+                }
+
+                .reception-dashboard .reception-summary-card .card-body {
+                    padding: 0.875rem 1.25rem;
+                }
+
+                .reception-dashboard .summary-card-content {
+                    gap: 1.25rem;
+                }
+
+                .reception-dashboard .summary-icon-circle {
+                    align-items: center;
+                    background: #f8f9fa;
+                    border-radius: 50%;
+                    display: flex;
+                    flex: 0 0 76px;
+                    height: 76px;
+                    justify-content: center;
+                    width: 76px;
+                }
+
+                .reception-dashboard .summary-icon {
+                    font-size: 2.75rem;
+                    line-height: 1;
+                }
+
+                .reception-dashboard .summary-metric {
+                    font-size: 36px;
+                }
+            </style>
+
+            <div class="reception-dashboard-header">
+                <h3 class="fw-bold">Reception Dashboard</h3>
+            </div>
 
             <div class="row mb-3">
 
@@ -30,59 +222,91 @@ frappe.pages["reception-dashboard"].on_page_load = function(wrapper) {
             <div class="row mb-3">
 
                 <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width:60px;height:60px;">
-                                <span class="fs-2">👥</span>
+                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+                        <div class="card-body d-flex align-items-center summary-card-content">
+                            <div class="summary-icon-circle">
+                                <span class="summary-icon">👥</span>
                             </div>
                             <div>
                                 <div class="text-uppercase fw-bold mb-2">Today's Patients</div>
-                                <div id="summary-today-count" class="fw-bold" style="font-size:36px;">0</div>
+                                <div id="summary-today-count" class="fw-bold summary-metric">0</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width:60px;height:60px;">
-                                <span class="fs-2">⏳</span>
+                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+                        <div class="card-body d-flex align-items-center summary-card-content">
+                            <div class="summary-icon-circle">
+                                <span class="summary-icon">⏳</span>
                             </div>
                             <div>
                                 <div class="text-uppercase fw-bold mb-2">Waiting</div>
-                                <div id="summary-waiting-count" class="fw-bold" style="font-size:36px;">0</div>
+                                <div id="summary-waiting-count" class="fw-bold summary-metric">0</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width:60px;height:60px;">
-                                <span class="fs-2">✅</span>
+                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+                        <div class="card-body d-flex align-items-center summary-card-content">
+                            <div class="summary-icon-circle">
+                                <span class="summary-icon">✅</span>
                             </div>
                             <div>
                                 <div class="text-uppercase fw-bold mb-2">Checked In</div>
-                                <div id="summary-checked-in-count" class="fw-bold" style="font-size:36px;">0</div>
+                                <div id="summary-checked-in-count" class="fw-bold summary-metric">0</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width:60px;height:60px;">
-                                <span class="fs-2">💚</span>
+                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+                        <div class="card-body d-flex align-items-center summary-card-content">
+                            <div class="summary-icon-circle">
+                                <span class="summary-icon">💚</span>
                             </div>
                             <div>
                                 <div class="text-uppercase fw-bold mb-2">Ready for Billing</div>
-                                <div id="summary-ready-count" class="fw-bold" style="font-size:36px;">0</div>
+                                <div id="summary-ready-count" class="fw-bold summary-metric">0</div>
                             </div>
                         </div>
                     </div>
+                </div>
+
+            </div>
+            <div class="row mb-3">
+
+                <div class="col-md-12">
+
+                    <div class="card mb-3 shadow-sm">
+
+                        <div class="card-body">
+
+                            <div class="quick-actions-container">
+                                ${quickActions.map(function (action) {
+                                    return `
+                                        <div class="quick-action-item">
+                                            <button type="button" class="quick-action-card quick-action-card--${action.theme} shadow-sm rounded-3 ${action.buttonClass}">
+                                                <div>
+                                                    <div class="quick-action-icon-circle">
+                                                        <i class="fa ${action.icon} quick-action-icon" aria-hidden="true"></i>
+                                                    </div>
+                                                    <div class="quick-action-label">${action.label}</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    `;
+                                }).join("")}
+                            </div>
+
+                        </div>
+
+                    </div>
+
                 </div>
 
             </div>
@@ -107,7 +331,14 @@ frappe.pages["reception-dashboard"].on_page_load = function(wrapper) {
                     <div class="card mb-3">
                         <div class="card-body">
 
-                            <h4>Billing Queue</h4>
+                            <h4>
+    Billing Queue
+    <span
+        id="billing-count"
+        class="badge bg-primary ms-2">
+        0
+    </span>
+</h4>
 
                             <div id="billing-list">
                                 Loading...
@@ -166,9 +397,9 @@ frappe.pages["reception-dashboard"].on_page_load = function(wrapper) {
         $("#dashboard-timestamp").html(
             '<span class="fw-bold text-primary">📅</span> ' +
             '<span class="fw-bold text-primary">' + day + '</span> ' +
-            '<span class="fw-bold text-dark">|</span> ' +
+            '<span class="mx-3 fw-bold text-dark">|</span>' +
             '<span class="fw-bold text-dark">' + date + '</span> ' +
-            '<span class="fw-bold text-dark">|</span> ' +
+            '<span class="mx-3 fw-bold text-dark">|</span>' +
             '<span class="fw-bold text-dark">' + time + '</span> ' +
             '<span class="fw-bold text-primary">🕒</span>'
         );
@@ -197,6 +428,7 @@ frappe.call({
     callback: function (r) {
 
         let html = "";
+
         let totalAppointments = 0;
         let checkedInCount = 0;
         let waitingCount = 0;
@@ -267,6 +499,9 @@ frappe.call({
     callback: function (r) {
 
         let html = "";
+        $("#billing-count").text(
+    (r.message || []).length
+);
 
         if (!r.message || r.message.length === 0) {
 
@@ -274,30 +509,66 @@ frappe.call({
 
         } else {
 
-            r.message.forEach(function (bill) {
+            r.message.forEach(function (bill, index) {
+let badgeColor = "#0d6efd";
+
+if (bill.workflow_stage === "Draft") {
+    badgeColor = "#ffc107";
+} else if (bill.workflow_stage === "Pending Payment") {
+    badgeColor = "#fd7e14";
+} else if (bill.workflow_stage === "Completed") {
+    badgeColor = "#198754";
+}
 
 html += `
-    <div class="border-bottom py-3 d-flex align-items-center justify-content-between gap-3">
+<div class="border rounded p-3 mb-3">
+
+    <div class="d-flex justify-content-between">
 
         <div>
-            <div class="mb-1"><span class="me-1">👤</span><strong>${bill.customer_name}</strong></div>
-            <div class="text-secondary mb-1">🩺 Dr. ${bill.doctor_name || "-"}</div>
-            <div class="fw-bold">₹${bill.outstanding_amount}</div>
-        </div>
 
-        <div class="text-end">
-            <span class="badge badge-warning mb-2" style="font-size:0.95rem; padding:0.55em 0.85em;">${bill.status}</span>
-            <br>
+        <div class="fw-bold fs-6">
+    ${index + 1}.
+    &nbsp;&nbsp;
+    👤 ${bill.patient}
+</div>
+
+<div class="fw-bold mt-1">
+    ${bill.customer_name}
+</div>
+
+            <div class="text-secondary">
+                🩺 Dr. ${bill.doctor_name || "-"}
+            </div>
+<div class="mt-2">
+    💰 Total : ₹${bill.grand_total}
+</div>
+
+<div class="fw-bold text-danger mt-1">
+    💵 Due : ₹${bill.outstanding_amount}
+</div>
+</div>
+<div class="text-end">
+            <span
+                class="badge"
+                style="background:${badgeColor};padding:8px 12px;">
+                ${bill.workflow_stage}
+            </span>
+
+            <br><br>
+
             <button
                 class="btn btn-sm btn-primary view-invoice-btn"
                 data-invoice="${bill.name}">
                 View Invoice
             </button>
+
         </div>
 
     </div>
-`;
 
+</div>
+`;
 });
 
         }
@@ -369,6 +640,7 @@ frappe.call({
 });
 
 };
+
 function refreshReceptionDashboard() {
     frappe.set_route("reception-dashboard");
 
@@ -390,6 +662,53 @@ $(document).on("click", ".check-in-btn", function () {
     refreshReceptionDashboard();
 }
      });
+
+});
+
+$(document).on("click", ".quick-action-book-appointment-btn", function () {
+
+    frappe.new_doc("Patient Appointment");
+
+});
+
+$(document).on("click", ".quick-action-patient-btn", function () {
+
+    frappe.set_route("List", "Patient");
+
+});
+
+$(document).on("click", ".quick-action-yesterday-btn", function () {
+
+    frappe.route_options = {
+        appointment_date: frappe.datetime.add_days(frappe.datetime.get_today(), -1)
+    };
+
+    frappe.set_route("List", "Patient Appointment");
+
+});
+
+$(document).on("click", ".quick-action-tomorrow-btn", function () {
+
+    frappe.route_options = {
+        appointment_date: frappe.datetime.add_days(frappe.datetime.get_today(), 1)
+    };
+
+    frappe.set_route("List", "Patient Appointment");
+
+});
+
+$(document).on("click", ".quick-action-doctor-btn", function () {
+
+    frappe.set_route("List", "Healthcare Practitioner");
+
+});
+
+$(document).on("click", ".quick-action-accounts-btn", function () {
+
+    frappe.set_route(
+        "Workspaces",
+        "Accounting"
+    );
 
 });
 

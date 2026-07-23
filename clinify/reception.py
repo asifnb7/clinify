@@ -59,16 +59,19 @@ def get_billing_queue():
     invoices = frappe.get_all(
         "Sales Invoice",
         filters={"docstatus": ["!=", 2]},
-        fields=[
-            "name",
-            "customer_name",
-            "custom_primary_doctor",
-            "grand_total",
-            "outstanding_amount",
-            "posting_date",
-            "status",
-        ],
-        order_by="posting_date desc, creation desc",
+fields=[
+    "name",
+    "patient",
+    "customer",
+    "customer_name",
+    "custom_primary_doctor",
+    "grand_total",
+    "outstanding_amount",
+    "posting_date",
+    "status",
+],
+
+order_by="posting_date desc, creation desc",
     )
 
     practitioner_ids = {
@@ -195,3 +198,47 @@ def create_invoice_from_ready_appointment(appointment):
         "success": True,
         "invoice": invoice_name,
     }
+
+@frappe.whitelist()
+def search_patients(search_text):
+    """
+    Smart Patient Search
+
+    Search by:
+    - Clinify Patient ID
+    - Patient Name
+    - Mobile Number
+    """
+
+    search_text = (search_text or "").strip()
+
+    if not search_text:
+        return []
+
+    return frappe.get_all(
+        "Patient",
+        or_filters=[
+            {
+                "custom_clinify_patient_id": ["like", f"%{search_text}%"]
+            },
+            {
+                "patient_name": ["like", f"%{search_text}%"]
+            },
+            {
+                "mobile": ["like", f"%{search_text}%"]
+            },
+            {
+                "phone": ["like", f"%{search_text}%"]
+            },
+        ],
+        fields=[
+            "name",
+            "patient_name",
+            "mobile",
+            "custom_clinify_patient_id",
+            "sex",
+            "dob",
+        ],
+        limit_page_length=20,
+        order_by="modified desc",
+    )

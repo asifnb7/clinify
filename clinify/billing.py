@@ -24,6 +24,7 @@ def create_invoice_from_dental_plan(plan_name):
         frappe.throw("No completed, unbilled procedures found.")
 
     invoice = frappe.new_doc("Sales Invoice")
+    invoice.patient = plan.patient
     invoice.customer = plan.patient
     invoice.custom_primary_doctor = plan.primary_doctor
     invoice.set_posting_time = 1
@@ -56,7 +57,7 @@ def create_invoice_from_dental_plan(plan_name):
     # Leave the invoice in Draft.
     # Reception will review, edit and submit manually.
 
-    # Mark procedure as billed
+    # Mark procedures as billed
     for row in rows:
 
         frappe.db.set_value(
