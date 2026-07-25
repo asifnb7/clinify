@@ -242,3 +242,80 @@ def search_patients(search_text):
         limit_page_length=20,
         order_by="modified desc",
     )
+
+
+@frappe.whitelist()
+def get_reception_patient(patient):
+    """
+    Return the basic patient details required by the Reception Patient Workspace.
+    """
+
+    if not patient:
+        frappe.throw("Patient is required.")
+
+    if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    patient_details = frappe.db.get_value(
+        "Patient",
+        patient,
+        [
+            "name",
+            "patient_name",
+            "mobile",
+            "phone",
+            "custom_clinify_patient_id",
+            "sex",
+            "dob",
+        ],
+        as_dict=True,
+    )
+
+    if not patient_details:
+        frappe.throw("Patient not found.")
+
+    return patient_details
+
+@frappe.whitelist()
+def get_patient_appointments(patient):
+    """
+    Returns the latest 5 appointments for a patient.
+    """
+
+    appointments = frappe.get_all(
+        "Patient Appointment",
+        filters={
+            "patient": patient
+        },
+        fields=[
+            "name",
+            "appointment_date",
+            "appointment_time",
+            "practitioner",
+            "department",
+            "status",
+            "custom_reception_status"
+        ],
+        order_by="appointment_date desc, appointment_time desc",
+        limit_page_length=5
+    )
+
+    practitioners = {}
+
+    for row in appointments:
+        practitioner = row.get("practitioner")
+
+        if practitioner:
+            if practitioner not in practitioners:
+                practitioners[practitioner] = frappe.db.get_value(
+                    "Healthcare Practitioner",
+                    practitioner,
+                    "practitioner_name"
+                )
+
+            doctor_name = practitioners.get(practitioner, "")
+
+            row["doctor_name"] = doctor_name
+            row["practitioner_name"] = doctor_name
+
+    return appointments

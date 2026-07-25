@@ -673,7 +673,7 @@ $(document).on("click", ".quick-action-book-appointment-btn", function () {
 
 $(document).on("click", ".quick-action-patient-btn", function () {
 
-    frappe.set_route("List", "Patient");
+    frappe.set_route("reception-patient-workspace");
 
 });
 
