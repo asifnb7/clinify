@@ -319,3 +319,31 @@ def get_patient_appointments(patient):
             row["practitioner_name"] = doctor_name
 
     return appointments
+
+
+@frappe.whitelist()
+def get_patient_encounters(patient):
+    """
+    Return the latest Patient Encounters for the selected patient.
+    """
+
+    encounters = frappe.get_all(
+        "Patient Encounter",
+        filters={
+            "patient": patient,
+            "docstatus": ["!=", 2]
+        },
+        fields=[
+            "name",
+            "encounter_date",
+            "encounter_time",
+            "practitioner",
+            "practitioner_name",
+            "medical_department",
+            "status"
+        ],
+        order_by="encounter_date desc, encounter_time desc",
+        limit_page_length=10
+    )
+
+    return encounters
