@@ -274,19 +274,38 @@ def get_reception_patient(patient):
     if not patient_details:
         frappe.throw("Patient not found.")
 
+    # ---------------------------------------------------------
+    # Calculate TOTAL Outstanding Balance
+    # (Same logic used by Billing)
+    # ---------------------------------------------------------
+
+    outstanding = frappe.db.sql(
+        """
+        SELECT COALESCE(SUM(outstanding_amount), 0)
+
+        FROM `tabSales Invoice`
+
+        WHERE
+            patient = %s
+            AND docstatus != 2
+        """,
+        (patient,),
+    )[0][0]
+
+    patient_details["account_balance"] = float(outstanding or 0)
+
     return patient_details
 
 @frappe.whitelist()
 def get_patient_appointments(patient):
     """
-    Returns the latest 5 appointments for a patient.
+    Returns the latest 5 appointments for a patient
+    together with doctor name and billing information.
     """
 
     appointments = frappe.get_all(
         "Patient Appointment",
-        filters={
-            "patient": patient
-        },
+        filters={"patient": patient},
         fields=[
             "name",
             "appointment_date",
@@ -294,29 +313,52 @@ def get_patient_appointments(patient):
             "practitioner",
             "department",
             "status",
-            "custom_reception_status"
+            "custom_reception_status",
+            "ref_sales_invoice",
         ],
         order_by="appointment_date desc, appointment_time desc",
-        limit_page_length=5
+        limit_page_length=5,
     )
 
-    practitioners = {}
+    practitioner_cache = {}
 
     for row in appointments:
+
         practitioner = row.get("practitioner")
 
         if practitioner:
-            if practitioner not in practitioners:
-                practitioners[practitioner] = frappe.db.get_value(
+
+            if practitioner not in practitioner_cache:
+                practitioner_cache[practitioner] = frappe.db.get_value(
                     "Healthcare Practitioner",
                     practitioner,
                     "practitioner_name"
-                )
+                ) or practitioner
 
-            doctor_name = practitioners.get(practitioner, "")
+            row["doctor_name"] = practitioner_cache[practitioner]
 
-            row["doctor_name"] = doctor_name
-            row["practitioner_name"] = doctor_name
+        invoice = row.get("ref_sales_invoice")
+
+        if invoice:
+
+            invoice_data = frappe.db.get_value(
+                "Sales Invoice",
+                invoice,
+                ["grand_total", "outstanding_amount", "status"],
+                as_dict=True,
+            )
+
+            row["billing_status"] = "Billable"
+            row["invoice_total"] = float(invoice_data.grand_total or 0)
+            row["account_balance"] = float(invoice_data.outstanding_amount or 0)
+            row["invoice_status"] = invoice_data.status
+
+        else:
+
+            row["billing_status"] = "Pending"
+            row["invoice_total"] = 0
+            row["account_balance"] = 0
+            row["invoice_status"] = ""
 
     return appointments
 
@@ -340,10 +382,49 @@ def get_patient_encounters(patient):
             "practitioner",
             "practitioner_name",
             "medical_department",
-            "status"
+            "encounter_comment",
+            "status",
         ],
         order_by="encounter_date desc, encounter_time desc",
-        limit_page_length=10
+        limit_page_length=10,
     )
 
     return encounters
+
+@frappe.whitelist()
+def get_patient_billing(patient):
+    """
+    Return all Sales Invoices for the selected patient.
+    """
+
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={
+            "patient": patient,
+            "docstatus": ["!=", 2],
+        },
+        fields=[
+            "name",
+            "posting_date",
+            "status",
+            "grand_total",
+            "outstanding_amount",
+        ],
+        order_by="posting_date desc, creation desc",
+    )
+
+    total_outstanding = 0
+
+    for invoice in invoices:
+
+        grand_total = float(invoice.get("grand_total") or 0)
+        outstanding = float(invoice.get("outstanding_amount") or 0)
+
+        invoice["paid_amount"] = grand_total - outstanding
+
+        total_outstanding += outstanding
+
+    return {
+        "invoices": invoices,
+        "total_outstanding": total_outstanding,
+    }

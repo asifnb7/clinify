@@ -5,16 +5,20 @@ frappe.pages["reception-patient-workspace"].on_page_load = function (wrapper) {
         single_column: true
     });
 
-    const state = {
+const state = {
     patient: null,
     appointments: [],
+    encounters: [],
+    billing: [],
+    outstanding: 0,
+    payments: [],
+    prescriptions: [],
+    documents: [],
     searchResults: [],
     searchRequestId: 0
 };
 
     const placeholderSections = [
-    "Encounters",
-    "Billing",
     "Payments",
     "Prescriptions",
     "Documents"
@@ -23,7 +27,7 @@ frappe.pages["reception-patient-workspace"].on_page_load = function (wrapper) {
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value || "-"));
     }
-function calculateAge(dob) {
+    function calculateAge(dob) {
     if (!dob) return "-";
 
     const birthDate = new Date(dob);
@@ -44,14 +48,150 @@ function calculateAge(dob) {
     return age >= 0 ? `${age} Years` : "-";
 }
 
+function formatDate(value) {
+
+    if (!value) {
+        return "-";
+    }
+
+    const date = new Date(value);
+
+    if (isNaN(date)) {
+        return value;
+    }
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+
+    return `${day}-${month}-${year}`;
+}
+
+function formatTime(value) {
+
+    if (!value) {
+        return "-";
+    }
+
+    const time = String(value).split(".")[0];
+
+    const parts = time.split(":");
+
+    if (parts.length < 2) {
+        return value;
+    }
+
+    let hour = parseInt(parts[0], 10);
+    const minute = parts[1];
+
+    const suffix = hour >= 12 ? "PM" : "AM";
+
+    hour = hour % 12;
+
+    if (hour === 0) {
+        hour = 12;
+    }
+
+    return `${hour}:${minute} ${suffix}`;
+}
+
+function appointmentStatusBadge(status) {
+
+    const colors = {
+        "Scheduled": "warning",
+        "Open": "info",
+        "Closed": "success",
+        "Cancelled": "danger"
+    };
+
+    const color = colors[status] || "secondary";
+
+    return `
+        <span class="badge badge-${color}">
+            ${escapeHtml(status || "-")}
+        </span>
+    `;
+}
+
+function receptionStatusBadge(status) {
+
+    const colors = {
+        "Waiting": "secondary",
+        "Checked In": "info",
+        "Ready for Billing": "warning",
+        "Billing": "primary",
+        "Completed": "success"
+    };
+
+    const color = colors[status] || "secondary";
+
+    return `
+        <span class="badge badge-${color}">
+            ${escapeHtml(status || "-")}
+        </span>
+    `;
+}
+
+function accountBalanceHtml(balance) {
+
+    balance = Number(balance || 0);
+
+    let color = "#000000";
+
+    if (balance > 0) {
+        color = "#dc3545";
+    } else if (balance < 0) {
+        color = "#198754";
+    }
+
+    return `
+        <span style="
+            color:${color};
+            font-size:20px;
+            font-weight:700;
+        ">
+            ₹${Math.round(Math.abs(balance)).toLocaleString("en-IN")}
+        </span>
+    `;
+}
+
+function formatCurrency(amount) {
+    return `₹${Math.round(Math.abs(amount)).toLocaleString("en-IN")}`;
+}
+
+function appointmentAccountHtml(row) {
+
+    if (row.billing_status === "Pending") {
+        return `<span class="indicator orange">Pending</span>`;
+    }
+
+    return `
+        <span style="
+            color:${row.account_balance > 0 ? "#d9534f" : "#28a745"};
+            font-weight:600;
+        ">
+            ${formatCurrency(row.account_balance)}
+        </span>
+    `;
+}
+
 function renderPatientSummary(patient) {
+
     return `
         <div class="reception-patient-summary-details">
 
             <div>
-                <span>Patient Name</span>
-                <strong>${escapeHtml(patient.patient_name)}</strong>
-            </div>
+    <span>Patient Name</span>
+
+    <strong style="
+        color:#0d6efd;
+        font-size:20px;
+        font-weight:700;
+    ">
+        ${escapeHtml(patient.patient_name)}
+    </strong>
+
+</div>
 
             <div>
                 <span>Clinify ID</span>
@@ -61,9 +201,22 @@ function renderPatientSummary(patient) {
             </div>
 
             <div>
-                <span>ERPNext Patient ID</span>
+                <span>ERP Patient ID</span>
                 <strong>${escapeHtml(patient.name)}</strong>
             </div>
+
+               <div class="patient-account-summary">
+
+    <span>
+
+        Outstanding Account
+
+    </span>
+
+    ${accountBalanceHtml(patient.account_balance)}
+
+</div>
+    
 
             <div>
                 <span>Mobile</span>
@@ -78,8 +231,8 @@ function renderPatientSummary(patient) {
             </div>
 
             <div>
-                <span>Date of Birth</span>
-                <strong>${escapeHtml(patient.dob || "-")}</strong>
+                <span>DOB</span>
+                <strong>${escapeHtml(formatDate(patient.dob))}</strong>
             </div>
 
             <div>
@@ -90,34 +243,135 @@ function renderPatientSummary(patient) {
         </div>
     `;
 }
-function renderAppointments() {
 
-    if (!state.appointments.length) {
+function renderAppointments(appointments) {
+
+    if (!appointments || !appointments.length) {
+        return `
+    <section class="reception-workspace-card">
+
+        <h5>Appointment History</h5>
+
+        <div class="text-muted text-center p-4">
+            No appointment history found.
+        </div>
+
+    </section>
+`;
+    }
+
+    let html = `
+
+    <section class="reception-workspace-card">
+
+        <h5>Appointment History</h5>
+
+        <table class="table table-bordered table-hover">
+
+            <thead>
+
+                <tr>
+                    <th>Appointment</th>
+                    <th>Date</th>
+                    <th>Doctor</th>
+                    <th>Status</th>
+                    <th>Reception</th>
+                    <th>Account</th>
+                </tr>
+
+            </thead>
+
+            <tbody>
+`;
+
+    appointments.forEach(row => {
+
+        html += `
+            <tr>
+
+                <td>
+                    <a href="/app/patient-appointment/${row.name}"
+   target="_blank"
+   class="reception-document-link">
+                        ${row.name}
+                    </a>
+                </td>
+
+                <td>
+                    ${frappe.datetime.str_to_user(row.appointment_date)}
+                </td>
+
+                <td>
+                    ${row.doctor_name || ""}
+                </td>
+
+                <td>
+    ${appointmentStatusBadge(row.status)}
+</td>
+
+                <td>
+                    ${receptionStatusBadge(row.custom_reception_status)}
+                </td>
+
+                <td>
+                    ${appointmentAccountHtml(row)}
+                </td>
+
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+
+        </table>
+
+    </section>
+`;
+
+    return html;
+}
+
+function renderEncounterHistory() {
+
+    if (!state.encounters.length) {
         return `
             <section class="reception-workspace-card">
-                <h5>Appointment History</h5>
+                <h5>Encounter History</h5>
                 <p class="text-muted mb-0">
-                    No appointment history found.
+                    No encounter history available.
                 </p>
             </section>
         `;
     }
 
-    const rows = state.appointments.map(function (appointment) {
+    const rows = state.encounters.map(function (encounter) {
 
         return `
             <tr>
-                <td>${escapeHtml(appointment.appointment_date)}</td>
-                <td>${escapeHtml(appointment.appointment_time || "-")}</td>
-                <td>${escapeHtml(
-                    appointment.doctor_name ||
-                    appointment.practitioner_name ||
-                    "-"
-                )}</td>
-                <td>${escapeHtml(appointment.status || "-")}</td>
-                <td>${escapeHtml(
-                    appointment.custom_reception_status || "-"
-                )}</td>
+
+                <td>
+                    <a href="/app/patient-encounter/${encounter.name}"
+                       target="_blank">
+                        ${escapeHtml(encounter.name)}
+                    </a>
+                </td>
+
+                <td>
+                    ${escapeHtml(formatDate(encounter.encounter_date))}
+                </td>
+
+                <td>
+    ${escapeHtml(encounter.practitioner_name || "-")}
+</td>
+
+<td>
+    ${escapeHtml(encounter.medical_department || "-")}
+</td>
+
+<td>
+    ${escapeHtml(encounter.encounter_comment || "-")}
+</td>
             </tr>
         `;
 
@@ -125,28 +379,243 @@ function renderAppointments() {
 
     return `
         <section class="reception-workspace-card">
-            <h5>Appointment History</h5>
+
+            <h5>Encounter History</h5>
 
             <table class="table table-sm table-hover mb-0">
+
                 <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Doctor</th>
-                        <th>Status</th>
-                        <th>Reception</th>
-                    </tr>
-                </thead>
+
+                        <tr>
+    <th>Encounter</th>
+    <th>Date</th>
+    <th>Doctor</th>
+    <th>Department</th>
+    <th>Chief Complaint</th>
+</tr>
+                    </thead>
 
                 <tbody>
+
                     ${rows}
+
                 </tbody>
+
             </table>
+
         </section>
     `;
 }
 
-   function renderWorkspace() {
+
+function renderBilling() {
+
+    if (!state.billing.length) {
+
+        return `
+            <section class="reception-workspace-card">
+
+                <h5>Billing</h5>
+
+                <p class="text-muted mb-0">
+                    No invoices found.
+                </p>
+
+            </section>
+        `;
+    }
+
+    const rows = state.billing.map(function (invoice) {
+
+        return `
+            <tr>
+
+                <td>
+                    <a href="/app/sales-invoice/${invoice.name}"
+                       target="_blank">
+                        ${escapeHtml(invoice.name)}
+                    </a>
+                </td>
+
+                <td>
+                    ${escapeHtml(formatDate(invoice.posting_date))}
+                </td>
+
+                <td>
+                    ${escapeHtml(invoice.status)}
+                </td>
+
+                <td style="text-align:right;">
+                    ${formatCurrency(invoice.grand_total)}
+                </td>
+
+                <td style="text-align:right;">
+                    ${formatCurrency(invoice.paid_amount)}
+                </td>
+
+                <td style="text-align:right;color:#d9534f;font-weight:600;">
+                    ${formatCurrency(invoice.outstanding_amount)}
+                </td>
+
+            </tr>
+        `;
+
+    }).join("");
+
+    return `
+        <section class="reception-workspace-card">
+
+            <h5>Billing</h5>
+
+            <table class="table table-sm table-hover">
+
+                <thead>
+
+                    <tr>
+                        <th>Invoice</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Due</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    ${rows}
+
+                </tbody>
+
+            </table>
+
+            <hr>
+
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+            ">
+
+                <strong>Outstanding Balance</strong>
+
+                ${accountBalanceHtml(state.outstanding)}
+
+            </div>
+
+        </section>
+    `;
+}
+
+function renderSidebar() {
+
+    const sidebar = $(page.body).find("#reception-workspace-sidebar");
+
+    if (!sidebar.length) {
+        return;
+    }
+
+    if (!state.patient) {
+
+        sidebar.html(`
+            <h5>Workspace Sidebar</h5>
+
+            <div class="text-muted">
+                Search a patient to enable workspace actions.
+            </div>
+        `);
+
+        return;
+    }
+
+    sidebar.html(`
+
+        <h5>Workspace Sidebar</h5>
+
+        <div id="workspace-sidebar-content">
+
+            <div>
+
+                <div style="
+                    font-size:12px;
+                    color:#777;
+                    font-weight:600;
+                ">
+                    CURRENT PATIENT
+                </div>
+
+                <div style="
+                    color:#0d6efd;
+                    font-size:18px;
+                    font-weight:700;
+                    margin-top:6px;
+                ">
+                    ${escapeHtml(state.patient.patient_name)}
+                </div>
+
+                <div style="
+                    color:#777;
+                    font-size:13px;
+                ">
+                    ${escapeHtml(state.patient.name)}
+                </div>
+
+            </div>
+
+            <hr>
+
+            <div>
+
+                <strong>Quick Actions</strong>
+
+                <div style="
+                    display:grid;
+                    gap:10px;
+                    margin-top:12px;
+                ">
+
+                    <button
+                        class="btn btn-primary btn-sm"
+                        id="btn-new-appointment">
+
+                        New Appointment
+
+                    </button>
+
+                    <button
+                        class="btn btn-default btn-sm"
+                        id="btn-open-patient">
+
+                        Open Patient Record
+
+                    </button>
+
+                </div>
+
+            </div>
+
+            <hr>
+
+            <div>
+
+                <strong>Recent Activity</strong>
+
+                <div class="text-muted mt-2">
+
+                    Coming Soon
+
+                </div>
+
+            </div>
+
+        </div>
+
+    `);
+
+}
+
+function renderWorkspace() {
 
     const patient = state.patient;
 
@@ -159,32 +628,63 @@ function renderAppointments() {
         `;
 
     const appointmentSection = patient
-        ? renderAppointments()
+        ? renderAppointments(state.appointments)
+        : "";
+
+    const encounterSection = patient
+        ? renderEncounterHistory()
+        : "";
+
+    const billingSection = patient
+        ? renderBilling()
         : "";
 
     const placeholderCards = patient
-        ? placeholderSections.map(function (section) {
+        ? placeholderSections.map(function(section){
+
             return `
                 <section class="reception-workspace-card">
+
                     <h5>${section}</h5>
+
                     <p class="text-muted mb-0">
+
                         ${section} details will appear here.
+
                     </p>
+
                 </section>
             `;
+
         }).join("")
         : "";
 
-    $(page.body).find("#reception-patient-workspace-content").html(`
-        <section class="reception-workspace-card reception-patient-summary-card">
-            <h5>Patient Summary</h5>
-            ${patientSummary}
-        </section>
+    $(page.body)
 
-        ${appointmentSection}
+        .find("#reception-patient-workspace-content")
 
-        ${placeholderCards}
-    `);
+        .html(`
+
+            <section class="reception-workspace-card reception-patient-summary-card">
+
+                <h5>Patient Summary</h5>
+
+                ${patientSummary}
+
+            </section>
+
+            ${appointmentSection}
+
+            ${encounterSection}
+
+            ${billingSection}
+
+            ${placeholderCards}
+
+        `);
+
+    renderSidebar();
+
 }
 
     function renderSearchResults() {
@@ -253,14 +753,39 @@ function renderAppointments() {
 
                     state.appointments = appointmentResponse.message || [];
 
-                    state.searchResults = [];
+frappe.call({
+    method: "clinify.reception.get_patient_encounters",
+    args: {
+        patient: patientName
+    },
+    callback: function (encounterResponse) {
 
-                    $(page.body)
-                        .find("#reception-patient-search")
-                        .val(state.patient.patient_name);
+        state.encounters = encounterResponse.message || [];
 
-                    renderSearchResults();
-                    renderWorkspace();
+frappe.call({
+    method: "clinify.reception.get_patient_billing",
+    args: {
+        patient: patientName
+    },
+    callback: function (billingResponse) {
+
+        const billingData = billingResponse.message || {};
+
+state.billing = billingData.invoices || [];
+state.outstanding = billingData.total_outstanding || 0;
+
+        state.searchResults = [];
+
+        $(page.body)
+            .find("#reception-patient-search")
+            .val(state.patient.patient_name);
+
+        renderSearchResults();
+        renderWorkspace();
+    }
+});
+    }
+});
                 }
             });
         }
@@ -341,10 +866,25 @@ function renderAppointments() {
                 }
 
                 .reception-patient-result:hover,
-                .reception-patient-result:focus {
-                    background: var(--blue-50, #f7fbfd);
-                    outline: none;
-                }
+.reception-patient-result:focus {
+    background: var(--blue-50, #f7fbfd);
+    outline: none;
+}
+
+.reception-document-link,
+.reception-workspace-card table a {
+
+    color: #0d6efd;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.reception-document-link:hover,
+.reception-workspace-card table a:hover {
+
+    color: #084298;
+    text-decoration: underline;
+}
 
                 .reception-patient-result span,
                 .reception-patient-result small,
@@ -353,10 +893,10 @@ function renderAppointments() {
                 }
 
                 .reception-patient-workspace-layout {
-                    display: grid;
-                    gap: 1.25rem;
-                    grid-template-columns: minmax(0, 1fr) 280px;
-                }
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: minmax(0, 1fr) 220px;
+}
 
                 .reception-patient-workspace-content {
                     display: grid;
@@ -371,25 +911,62 @@ function renderAppointments() {
                 }
 
                 .reception-workspace-card h5,
-                .reception-workspace-sidebar h5 {
-                    font-weight: 700;
-                    margin-bottom: 0.875rem;
-                }
+.reception-workspace-sidebar h5 {
+
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+
+    border-radius: 8px 8px 0 0;
+
+    margin: -1.25rem -1.25rem 1rem -1.25rem;
+
+    padding: 12px 16px;
+
+    font-weight: 700;
+}
 
                 .reception-patient-summary-card {
                     grid-column: 1 / -1;
                 }
 
                 .reception-patient-summary-details {
-                    display: grid;
-                    gap: 1rem;
-                    grid-template-columns: repeat(3, minmax(0, 1fr));
-                }
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 
                 .reception-patient-summary-details div {
                     display: grid;
                     gap: 0.25rem;
                 }
+.patient-account-summary {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.patient-account-summary span {
+
+    color:#666;
+
+    font-size:13px;
+
+    font-weight:700;
+
+    letter-spacing:.4px;
+
+    text-transform:uppercase;
+
+}
+    #workspace-sidebar-content {
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:18px;
+
+}
+    
 
                 @media (max-width: 991.98px) {
                     .reception-patient-workspace-layout {
@@ -422,10 +999,10 @@ function renderAppointments() {
 
             <div class="reception-patient-workspace-layout">
                 <main id="reception-patient-workspace-content" class="reception-patient-workspace-content"></main>
-                <aside class="reception-workspace-sidebar">
-                    <h5>Workspace Sidebar</h5>
-                    <p class="text-muted mb-0">Reserved for upcoming reception actions.</p>
-                </aside>
+<aside
+    id="reception-workspace-sidebar"
+    class="reception-workspace-sidebar">
+</aside>
             </div>
         </div>
     `);
@@ -451,4 +1028,27 @@ function renderAppointments() {
     });
 
     renderWorkspace();
+$(page.body).on("click", "#btn-open-patient", function () {
+
+    if (!state.patient) return;
+
+    frappe.set_route(
+        "Form",
+        "Patient",
+        state.patient.name
+    );
+
+});
+
+$(page.body).on("click", "#btn-new-appointment", function () {
+
+    if (!state.patient) return;
+
+    frappe.new_doc("Patient Appointment", {
+
+        patient: state.patient.name
+
+    });
+
+});
 };
