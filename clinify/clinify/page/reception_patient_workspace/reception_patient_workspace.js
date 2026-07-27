@@ -19,7 +19,6 @@ const state = {
 };
 
     const placeholderSections = [
-    "Payments",
     "Prescriptions",
     "Documents"
 ];
@@ -508,6 +507,86 @@ function renderBilling() {
     `;
 }
 
+function renderPayments() {
+
+    if (!state.payments.length) {
+
+        return `
+            <section class="reception-workspace-card">
+
+                <h5>Payment History</h5>
+
+                <p class="text-muted mb-0">
+                    No payment history found.
+                </p>
+
+            </section>
+        `;
+    }
+
+    const rows = state.payments.map(function (payment) {
+
+        return `
+            <tr>
+
+                <td>
+                    <a href="/app/payment-entry/${payment.payment_entry}"
+                       target="_blank">
+                        ${escapeHtml(payment.payment_entry)}
+                    </a>
+                </td>
+
+                <td>${escapeHtml(formatDate(payment.posting_date))}</td>
+
+                <td>${escapeHtml(payment.mode_of_payment || "-")}</td>
+
+                <td>
+                    <a href="/app/sales-invoice/${payment.invoice}"
+                       target="_blank">
+                        ${escapeHtml(payment.invoice)}
+                    </a>
+                </td>
+
+                <td style="text-align:right;">
+                    ${formatCurrency(payment.allocated_amount)}
+                </td>
+
+            </tr>
+        `;
+
+    }).join("");
+
+    return `
+        <section class="reception-workspace-card">
+
+            <h5>Payment History</h5>
+
+            <table class="table table-sm table-hover">
+
+                <thead>
+
+                    <tr>
+                        <th>Payment Entry</th>
+                        <th>Date</th>
+                        <th>Mode</th>
+                        <th>Invoice</th>
+                        <th>Amount</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    ${rows}
+
+                </tbody>
+
+            </table>
+
+        </section>
+    `;
+}
+
 function renderSidebar() {
 
     const sidebar = $(page.body).find("#reception-workspace-sidebar");
@@ -639,6 +718,10 @@ function renderWorkspace() {
         ? renderBilling()
         : "";
 
+const paymentSection = patient
+    ? renderPayments()
+    : "";
+
     const placeholderCards = patient
         ? placeholderSections.map(function(section){
 
@@ -679,7 +762,9 @@ function renderWorkspace() {
 
             ${billingSection}
 
-            ${placeholderCards}
+${paymentSection}
+
+${placeholderCards}
 
         `);
 
@@ -774,23 +859,43 @@ frappe.call({
 state.billing = billingData.invoices || [];
 state.outstanding = billingData.total_outstanding || 0;
 
-        state.searchResults = [];
+frappe.call({
+    method: "clinify.reception.get_patient_payments",
+    args: {
+        patient: patientName
+    },
+    callback: function (paymentResponse) {
 
-        $(page.body)
-            .find("#reception-patient-search")
-            .val(state.patient.patient_name);
+    state.payments = paymentResponse.message || [];
 
-        renderSearchResults();
-        renderWorkspace();
-    }
-});
-    }
-});
-                }
-            });
-        }
-    });
+    state.searchResults = [];
+
+    const $search = $(page.body)
+        .find("#reception-patient-search");
+
+    $search.val(state.patient.patient_name);
+
+    renderSearchResults();
+    renderWorkspace();
+
+    $search.trigger("focus");
+    $search.select();
+
 }
+});
+    }   // billing callback
+});
+
+    }   // encounter callback
+});
+
+    }   // appointment callback
+});
+
+    }   // patient callback
+});
+
+}       // end of loadPatient()
 
     $(page.body).html(`
         <div class="container-fluid reception-patient-workspace">
