@@ -428,3 +428,54 @@ def get_patient_billing(patient):
         "invoices": invoices,
         "total_outstanding": total_outstanding,
     }
+
+@frappe.whitelist()
+def get_patient_payments(patient):
+    """
+    Return all Payment Entries linked to the patient's Sales Invoices.
+    """
+
+    # Get all submitted Sales Invoices for this patient
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={
+            "patient": patient,
+            "docstatus": 1,
+        },
+        pluck="name",
+    )
+
+    if not invoices:
+        return []
+
+    payments = frappe.db.sql(
+        """
+        SELECT
+            pe.name AS payment_entry,
+            pe.posting_date,
+            pe.mode_of_payment,
+            per.reference_name AS invoice,
+            per.allocated_amount,
+            pe.paid_amount
+
+        FROM `tabPayment Entry Reference` per
+
+        INNER JOIN `tabPayment Entry` pe
+            ON pe.name = per.parent
+
+        WHERE
+            per.reference_doctype = 'Sales Invoice'
+            AND per.reference_name IN %(invoices)s
+            AND pe.docstatus = 1
+
+        ORDER BY
+            pe.posting_date DESC,
+            pe.creation DESC
+        """,
+        {
+            "invoices": tuple(invoices),
+        },
+        as_dict=True,
+    )
+
+    return payments
