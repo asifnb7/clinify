@@ -117,3 +117,127 @@ select {
 
     background: #F5F7FA !important;
 }
+/* ===========================================================
+   CLINIFY NEXT UI - SIDEBAR V1
+   =========================================================== */
+
+/* Sidebar Width */
+
+.layout-side-section,
+.standard-sidebar,
+.list-sidebar {
+    width: 280px;
+}
+
+/* Sidebar Links */
+
+.layout-side-section a,
+.standard-sidebar a,
+.list-sidebar a,
+.standard-sidebar-item,
+.layout-side-section .sidebar-item {
+
+    display: flex;
+    align-items: center;
+
+    min-height: 48px;
+
+    padding: 10px 16px;
+
+    margin: 4px 8px;
+
+    border-radius: 12px;
+
+    transition: all .20s ease;
+
+    text-decoration: none !important;
+}
+
+/* Sidebar Label */
+
+.sidebar-item-label {
+
+    font-size: 16px !important;
+
+    font-weight: 600 !important;
+
+    color: #FFFFFF !important;
+
+    opacity: 1 !important;
+
+    visibility: visible !important;
+}
+
+/* Icons */
+
+.standard-sidebar svg,
+.layout-side-section svg {
+
+    width: 22px !important;
+
+    height: 22px !important;
+
+    margin-right: 12px;
+
+    fill: #FFFFFF !important;
+
+    color: #FFFFFF !important;
+
+    flex-shrink: 0;
+}
+
+/* Hover */
+
+.standard-sidebar-item:hover,
+.layout-side-section .sidebar-item:hover,
+.standard-sidebar a:hover,
+.layout-side-section a:hover {
+
+    background: rgba(255,255,255,.18) !important;
+
+    color: white !important;
+}
+
+/* Prevent disappearing text */
+
+.standard-sidebar-item:hover .sidebar-item-label,
+.layout-side-section .sidebar-item:hover .sidebar-item-label,
+.standard-sidebar a:hover .sidebar-item-label,
+.layout-side-section a:hover .sidebar-item-label {
+
+    color: #FFFFFF !important;
+
+    opacity: 1 !important;
+
+    visibility: visible !important;
+}
+
+/* Active */
+
+.standard-sidebar-item.selected,
+.layout-side-section .selected {
+
+    background: rgba(255,255,255,.25) !important;
+
+    border-radius: 14px !important;
+
+    box-shadow: 0 4px 10px rgba(0,0,0,.12);
+}
+
+/* Public Heading */
+
+.sidebar-section-title,
+.sidebar-label {
+
+    color: rgba(255,255,255,.75) !important;
+
+    font-size: 13px !important;
+
+    font-weight: 700 !important;
+
+    letter-spacing: 1px;
+
+    text-transform: uppercase;
+
+    padding-left: 18px;
+}

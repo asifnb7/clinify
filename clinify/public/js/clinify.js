@@ -1,19 +1,17 @@
-/*
- * ==========================================================
- * Clinify UI Framework
- * Version : 1.0
- * ==========================================================
- */
+console.log("Clinify JS Loaded");
 
-frappe.ready(function () {
+frappe.router.on("change", () => {
 
-    // Current Desk Route
     const route = frappe.get_route();
 
-    if (!route || !route.length) {
-        return;
+    if (!route || !route.length) return;
+
+    console.log("Route:", route);
+
+    if (route[0] === "reception") {
+
+        console.log("Redirecting to Reception Dashboard");
+
+        frappe.set_route("reception-dashboard");
     }
-
-    console.log("Clinify UI Framework Loaded");
-
 });

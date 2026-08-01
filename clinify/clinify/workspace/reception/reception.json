@@ -1,0 +1,34 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"shortcuts\", \"type\": \"shortcut\"}]",
+ "creation": "2026-07-31 18:37:11.817466",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "hide_custom": 0,
+ "icon": "hospital",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Reception",
+ "links": [],
+ "modified": "2026-07-31 18:45:22.302211",
+ "modified_by": "Administrator",
+ "module": "Clinify",
+ "name": "Reception",
+ "number_cards": [],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "doc_view": "",
+   "label": "Reception Dashboard",
+   "link_to": "reception-dashboard",
+   "type": "Page"
+  }
+ ],
+ "title": "Reception"
+}

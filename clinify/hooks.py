@@ -56,7 +56,7 @@ override_whitelisted_methods = {}
 
 app_include_css = "/assets/clinify/theme/css/clinify-theme.css"
 
-app_include_js = "/assets/clinify/js/clinify_login.js"
+app_include_js = "/assets/clinify/js/clinify.js"
 web_include_css = "/assets/clinify/css/clinify-login.css"
 
 doc_events = {
@@ -70,3 +70,10 @@ doc_events = {
     }
 }
 
+# -----------------------------------------------------------------------------
+# Fixtures
+# -----------------------------------------------------------------------------
+
+fixtures = [
+    "Workspace"
+]
