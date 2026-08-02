@@ -45,12 +45,13 @@ def create_invoice_from_dental_plan(plan_name):
             )
 
         invoice.append(
-            "items",
-            {
-                "item_code": item,
-                "qty": 1
-            }
-        )
+    "items",
+    {
+        "item_code": item,
+        "qty": 1,
+        "description": row.procedure_type,
+    }
+)
 
     invoice.insert(ignore_permissions=True)
 
