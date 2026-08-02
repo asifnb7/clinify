@@ -31,18 +31,22 @@ def create_invoice_from_dental_plan(plan_name):
 
     for row in rows:
 
-        item = frappe.get_value(
-            "Dental Procedure Item Map",
-            {
-                "procedure_type": row.procedure_type
-            },
-            "item"
-        )
+       mapping = frappe.get_value(
+    "Dental Procedure Item Map",
+    {
+        "procedure_type": row.procedure_type
+    },
+    ["item"],
+    as_dict=True,
+)
 
-        if not item:
-            frappe.throw(
-                f"No Item mapping found for {row.procedure_type}"
-            )
+if not mapping:
+    frappe.throw(
+        f"Dental procedure '{row.procedure_type}' is not mapped to an ERPNext Item. "
+        "Please create a Dental Procedure Item Map before billing."
+    )
+
+item = mapping.item
 
         invoice.append(
     "items",
