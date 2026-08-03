@@ -29,7 +29,6 @@ def install():
         fieldtype="Section Break",
         insert_after="section_break_xley",
     )
-
     create_field(
         doctype="Clinic Configuration",
         fieldname="free_followup_days",
@@ -46,6 +45,15 @@ def install():
         fieldtype="Check",
         insert_after="free_followup_days",
         default="0",
+    )
+
+    create_field(
+        doctype="Clinic Configuration",
+        fieldname="consultation_item",
+        label="Consultation Item",
+        fieldtype="Link",
+        options="Item",
+        insert_after="allow_multiple_free_followups",
     )
 
     print("\n===================================")

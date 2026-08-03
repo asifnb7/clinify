@@ -12,12 +12,12 @@ def create_invoice_from_dental_plan(plan_name):
         filters={
             "parent": plan_name,
             "planned_status": "Completed",
-            "billed_invoice": ["is", "not set"]
+            "billed_invoice": ["is", "not set"],
         },
         fields=[
             "name",
-            "procedure_type"
-        ]
+            "procedure_type",
+        ],
     )
 
     if not rows:
@@ -31,31 +31,30 @@ def create_invoice_from_dental_plan(plan_name):
 
     for row in rows:
 
-       mapping = frappe.get_value(
-    "Dental Procedure Item Map",
-    {
-        "procedure_type": row.procedure_type
-    },
-    ["item"],
-    as_dict=True,
-)
+        service = frappe.get_value(
+            "Dental Service",
+            {
+                "service_name": row.procedure_type,
+                "is_active": 1,
+            },
+            ["erpnext_item"],
+            as_dict=True,
+        )
 
-if not mapping:
-    frappe.throw(
-        f"Dental procedure '{row.procedure_type}' is not mapped to an ERPNext Item. "
-        "Please create a Dental Procedure Item Map before billing."
-    )
-
-item = mapping.item
+        if not service:
+            frappe.throw(
+                f"Procedure '{row.procedure_type}' in Treatment Plan "
+                f"'{plan_name}' is not configured in Dental Service."
+            )
 
         invoice.append(
-    "items",
-    {
-        "item_code": item,
-        "qty": 1,
-        "description": row.procedure_type,
-    }
-)
+            "items",
+            {
+                "item_code": service.erpnext_item,
+                "qty": 1,
+                "description": row.procedure_type,
+            },
+        )
 
     invoice.insert(ignore_permissions=True)
 
@@ -64,12 +63,11 @@ item = mapping.item
 
     # Mark procedures as billed
     for row in rows:
-
         frappe.db.set_value(
             "Dental Planned Procedure",
             row.name,
             "billed_invoice",
-            invoice.name
+            invoice.name,
         )
 
     frappe.db.commit()
