@@ -75,5 +75,8 @@ doc_events = {
 # -----------------------------------------------------------------------------
 
 fixtures = [
-    "Workspace"
+    "Workspace",
+    "Custom Field",
+    "Property Setter",
+    "Server Script",
 ]

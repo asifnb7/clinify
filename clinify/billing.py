@@ -73,3 +73,24 @@ def create_invoice_from_dental_plan(plan_name):
     frappe.db.commit()
 
     return invoice.name
+
+
+@frappe.whitelist()
+def complete_dental_procedure(procedure_name):
+    """
+    Mark a Dental Planned Procedure as Completed.
+    """
+
+    frappe.db.set_value(
+        "Dental Planned Procedure",
+        procedure_name,
+        "planned_status",
+        "Completed",
+    )
+
+    frappe.db.commit()
+
+    return {
+        "status": "success",
+        "procedure": procedure_name,
+    }
