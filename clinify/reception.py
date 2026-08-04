@@ -479,3 +479,43 @@ def get_patient_payments(patient):
     )
 
     return payments
+
+
+@frappe.whitelist()
+def get_dashboard_summary():
+    """
+    Return Reception Dashboard summary statistics.
+    """
+
+    appointments = frappe.get_all(
+        "Patient Appointment",
+        filters={
+            "appointment_date": nowdate(),
+            "docstatus": ["!=", 2],
+        },
+        fields=[
+            "custom_reception_status",
+        ],
+    )
+
+    summary = {
+        "today": len(appointments),
+        "waiting": 0,
+        "checked_in": 0,
+        "ready_for_billing": 0,
+    }
+
+    for row in appointments:
+
+        status = row.get("custom_reception_status")
+
+        if status == "Waiting":
+            summary["waiting"] += 1
+
+        elif status == "Checked In":
+            summary["checked_in"] += 1
+
+        elif status == "Billing":
+            summary["ready_for_billing"] += 1
+
+    return summary

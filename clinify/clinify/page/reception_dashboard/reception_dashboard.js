@@ -1,11 +1,11 @@
-frappe.pages["reception-dashboard"].on_page_load = function(wrapper) {
+frappe.pages["reception-dashboard"].on_page_load = function (wrapper) {
 
-
-
-    var page = frappe.ui.make_app_page({
+    let page = frappe.ui.make_app_page({
         parent: wrapper,
         single_column: true
     });
+
+    page.set_title(__("Reception Dashboard"));
 
     const quickActions = [
         {
@@ -47,461 +47,815 @@ frappe.pages["reception-dashboard"].on_page_load = function(wrapper) {
     ];
 
     $(page.body).html(`
-        <div class="container-fluid reception-dashboard">
-            <style>
-                .reception-dashboard {
-                    margin-top: -0.75rem;
-                }
 
-                .reception-dashboard .quick-actions-container {
-                    display: flex;
-                    flex-wrap: nowrap;
-                    gap: 1.25rem;
-                }
+<div class="container-fluid reception-dashboard">
 
-                .reception-dashboard .quick-action-item {
-                    flex: 1 1 0;
-                    min-width: 0;
-                }
+<style>
 
-                .reception-dashboard .quick-action-card {
-                    align-items: center;
-                    background: #ffffff;
-                    border: 1px solid #edf0f3;
-                    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
-                    color: inherit;
-                    cursor: pointer;
-                    display: flex;
-                    justify-content: center;
-                    min-height: 112px;
-                    padding: 0.5rem 1rem;
-                    text-align: center;
-                    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-                    width: 100%;
-                }
+.reception-dashboard{
+    margin-top:-0.75rem;
+}
 
-                .reception-dashboard .quick-action-card:hover,
-                .reception-dashboard .quick-action-card:focus {
-                    background: #fcfdff;
-                    border-color: rgba(13, 110, 253, 0.25);
-                    box-shadow: 0 0.75rem 1.5rem rgba(16, 24, 40, 0.1);
-                    outline: none;
-                    transform: translateY(-3px);
-                }
+.reception-dashboard .quick-actions-container{
+    display:flex;
+    flex-wrap:nowrap;
+    gap:1.25rem;
+}
 
-                .reception-dashboard .quick-action-icon-circle {
-                    align-items: center;
-                    border-radius: 50%;
-                    display: flex;
-                    height: 72px;
-                    justify-content: center;
-                    margin-bottom: 0.25rem;
-                    width: 72px;
-                }
+.reception-dashboard .quick-action-item{
+    flex:1 1 0;
+    min-width:0;
+}
 
-                .reception-dashboard .quick-action-icon {
-                    font-size: 36px;
-                }
+.reception-dashboard .quick-action-card{
 
-                .reception-dashboard .quick-action-label {
-                    font-size: 0.9rem;
-                    font-weight: 700;
-                }
+    align-items:center;
+    background:#fff;
+    border:1px solid #edf0f3;
+    box-shadow:0 2px 8px rgba(16,24,40,.06);
 
-                .reception-dashboard .quick-action-card--appointment .quick-action-icon-circle {
-                    background: #fff3cd;
-                }
+    color:inherit;
+    cursor:pointer;
 
-                .reception-dashboard .quick-action-card--appointment .quick-action-icon {
-                    color: #856404;
-                }
+    display:flex;
+    justify-content:center;
 
-                .reception-dashboard .quick-action-card--patient .quick-action-icon-circle,
-                .reception-dashboard .quick-action-card--yesterday .quick-action-icon-circle,
-                .reception-dashboard .quick-action-card--tomorrow .quick-action-icon-circle {
-                    background: rgba(13, 110, 253, 0.1);
-                }
+    min-height:112px;
 
-                .reception-dashboard .quick-action-card--patient .quick-action-icon,
-                .reception-dashboard .quick-action-card--yesterday .quick-action-icon,
-                .reception-dashboard .quick-action-card--tomorrow .quick-action-icon {
-                    color: var(--primary, #0d6efd);
-                }
+    padding:.5rem 1rem;
 
-                .reception-dashboard .quick-action-card--doctor .quick-action-icon-circle {
-                    background: rgba(25, 135, 84, 0.1);
-                }
+    text-align:center;
 
-                .reception-dashboard .quick-action-card--doctor .quick-action-icon {
-                    color: #198754;
-                }
+    transition:
+        background-color .2s,
+        border-color .2s,
+        box-shadow .2s,
+        transform .2s;
 
-                .reception-dashboard .quick-action-card--accounts .quick-action-icon-circle {
-                    background: rgba(253, 126, 20, 0.12);
-                }
+    width:100%;
+}
 
-                .reception-dashboard .quick-action-card--accounts .quick-action-icon {
-                    color: #fd7e14;
-                }
+.reception-dashboard .quick-action-card:hover{
 
-                @media (max-width: 991.98px) {
-                    .reception-dashboard .quick-actions-container {
-                        flex-wrap: wrap;
-                    }
+    background:#fcfdff;
 
-                    .reception-dashboard .quick-action-item {
-                        flex: 1 1 30%;
-                        min-width: 150px;
-                    }
-                }
+    border-color:rgba(13,110,253,.25);
 
-                .reception-dashboard .reception-dashboard-header {
-                    background: var(--blue-600, #007be0);
-                    color: #fff;
-                    display: flex;
-                    align-items: center;
-                    margin-bottom: 1.5rem;
-                    min-height: 84px;
-                    padding: 1.5rem;
-                }
+    box-shadow:0 .75rem 1.5rem rgba(16,24,40,.10);
 
-                .reception-dashboard .reception-dashboard-header h3 {
-                    color: #fff;
-                    margin: 0;
-                }
+    transform:translateY(-3px);
+}
 
-                .reception-dashboard .reception-summary-card .card-body {
-                    padding: 0.875rem 1.25rem;
-                }
+.reception-dashboard .quick-action-icon-circle{
 
-                .reception-dashboard .summary-card-content {
-                    gap: 1.25rem;
-                }
+    display:flex;
+    justify-content:center;
+    align-items:center;
 
-                .reception-dashboard .summary-icon-circle {
-                    align-items: center;
-                    background: #f8f9fa;
-                    border-radius: 50%;
-                    display: flex;
-                    flex: 0 0 76px;
-                    height: 76px;
-                    justify-content: center;
-                    width: 76px;
-                }
+    width:72px;
+    height:72px;
 
-                .reception-dashboard .summary-icon {
-                    font-size: 2.75rem;
-                    line-height: 1;
-                }
+    border-radius:50%;
 
-                .reception-dashboard .summary-metric {
-                    font-size: 36px;
-                }
-            </style>
+    margin-bottom:.25rem;
+}
 
-            <div class="reception-dashboard-header">
-                <h3 class="fw-bold">Reception Dashboard</h3>
-            </div>
+.reception-dashboard .quick-action-icon{
 
-            <div class="row mb-3">
+    font-size:36px;
 
-                <div class="col-md-12 text-md-end">
-                    <span id="dashboard-timestamp" class="d-inline-flex align-items-center rounded-3" style="background:#fff3cd;padding:10px 18px;font-weight:700;">
-                        <span class="fw-bold text-primary me-2">📅</span>
-                        <span class="fw-bold text-primary me-2" id="dashboard-day">Wednesday</span>
-                        <span class="fw-bold text-dark me-2">|</span>
-                        <span class="fw-bold text-dark me-2" id="dashboard-date">13 Jul 2026</span>
-                        <span class="fw-bold text-dark me-2">|</span>
-                        <span class="fw-bold text-dark" id="dashboard-time">10:42 AM</span>
-                        <span class="fw-bold text-primary ms-2">🕒</span>
-                    </span>
-                </div>
+}
 
-            </div>
+.reception-dashboard .quick-action-label{
 
-            <div class="row mb-3">
+    font-size:.9rem;
+    font-weight:700;
 
-                <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
-                        <div class="card-body d-flex align-items-center summary-card-content">
-                            <div class="summary-icon-circle">
-                                <span class="summary-icon">👥</span>
-                            </div>
-                            <div>
-                                <div class="text-uppercase fw-bold mb-2">Today's Patients</div>
-                                <div id="summary-today-count" class="fw-bold summary-metric">0</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+}
 
-                <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
-                        <div class="card-body d-flex align-items-center summary-card-content">
-                            <div class="summary-icon-circle">
-                                <span class="summary-icon">⏳</span>
-                            </div>
-                            <div>
-                                <div class="text-uppercase fw-bold mb-2">Waiting</div>
-                                <div id="summary-waiting-count" class="fw-bold summary-metric">0</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+.quick-action-card--appointment .quick-action-icon-circle{
 
-                <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
-                        <div class="card-body d-flex align-items-center summary-card-content">
-                            <div class="summary-icon-circle">
-                                <span class="summary-icon">✅</span>
-                            </div>
-                            <div>
-                                <div class="text-uppercase fw-bold mb-2">Checked In</div>
-                                <div id="summary-checked-in-count" class="fw-bold summary-metric">0</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    background:#fff3cd;
 
-                <div class="col-md-3">
-                    <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
-                        <div class="card-body d-flex align-items-center summary-card-content">
-                            <div class="summary-icon-circle">
-                                <span class="summary-icon">💚</span>
-                            </div>
-                            <div>
-                                <div class="text-uppercase fw-bold mb-2">Ready for Billing</div>
-                                <div id="summary-ready-count" class="fw-bold summary-metric">0</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+}
 
-            </div>
-            <div class="row mb-3">
+.quick-action-card--appointment .quick-action-icon{
 
-                <div class="col-md-12">
+    color:#856404;
 
-                    <div class="card mb-3 shadow-sm">
+}
 
-                        <div class="card-body">
+.quick-action-card--patient .quick-action-icon-circle,
+.quick-action-card--yesterday .quick-action-icon-circle,
+.quick-action-card--tomorrow .quick-action-icon-circle{
 
-                            <div class="quick-actions-container">
-                                ${quickActions.map(function (action) {
-                                    return `
-                                        <div class="quick-action-item">
-                                            <button type="button" class="quick-action-card quick-action-card--${action.theme} shadow-sm rounded-3 ${action.buttonClass}">
-                                                <div>
-                                                    <div class="quick-action-icon-circle">
-                                                        <i class="fa ${action.icon} quick-action-icon" aria-hidden="true"></i>
-                                                    </div>
-                                                    <div class="quick-action-label">${action.label}</div>
-                                                </div>
-                                            </button>
-                                        </div>
-                                    `;
-                                }).join("")}
-                            </div>
+    background:rgba(13,110,253,.1);
 
-                        </div>
+}
 
-                    </div>
+.quick-action-card--patient .quick-action-icon,
+.quick-action-card--yesterday .quick-action-icon,
+.quick-action-card--tomorrow .quick-action-icon{
 
-                </div>
+    color:#0d6efd;
 
-            </div>
+}
+.quick-action-card--doctor .quick-action-icon-circle{
 
-            <div class="row">
+    background:rgba(25,135,84,.10);
 
-                <div class="col-md-6">
-                    <div class="card mb-3">
-                        <div class="card-body">
+}
 
-                            <h4>Today's Appointments</h4>
+.quick-action-card--doctor .quick-action-icon{
 
-                            <div id="appointments-list">
-                                Loading...
-                            </div>
+    color:#198754;
 
-                        </div>
-                    </div>
-                </div>
+}
 
-                <div class="col-md-6">
-                    <div class="card mb-3">
-                        <div class="card-body">
+.quick-action-card--accounts .quick-action-icon-circle{
 
-                            <h4>
-    Billing Queue
-    <span
-        id="billing-count"
-        class="badge bg-primary ms-2">
-        0
-    </span>
-</h4>
+    background:rgba(253,126,20,.12);
 
-                            <div id="billing-list">
-                                Loading...
-                            </div>
+}
 
-                        </div>
-                    </div>
-                </div>
+.quick-action-card--accounts .quick-action-icon{
 
-            </div>
+    color:#fd7e14;
 
-            <div class="row">
+}
 
-                <div class="col-md-12">
-                    <div class="card mb-3">
-                        <div class="card-body">
+@media (max-width:991.98px){
 
-                            <h4>Ready for Billing</h4>
+    .reception-dashboard .quick-actions-container{
 
-                            <div id="ready-for-billing-list">
-                                <div class="table-responsive">
-                                    <table class="table table-borderless table-sm table-hover align-middle mb-0">
-                                        <thead class="text-uppercase">
-                                            <tr>
-                                                <th class="fw-bold">👤 Patient</th>
-                                                <th class="fw-bold">🩺 Doctor</th>
-                                                <th class="fw-bold">🕒 Time</th>
-                                                <th class="fw-bold">Status</th>
-                                                <th class="fw-bold">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td colspan="5">Loading...</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+        flex-wrap:wrap;
 
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-        </div>
-    `);
-
-    function updateDashboardTime() {
-        const now = new Date();
-        const day = now.toLocaleDateString("en-US", { weekday: "long" });
-        const date = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-        const time = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-
-        $("#dashboard-timestamp").html(
-            '<span class="fw-bold text-primary">📅</span> ' +
-            '<span class="fw-bold text-primary">' + day + '</span> ' +
-            '<span class="mx-3 fw-bold text-dark">|</span>' +
-            '<span class="fw-bold text-dark">' + date + '</span> ' +
-            '<span class="mx-3 fw-bold text-dark">|</span>' +
-            '<span class="fw-bold text-dark">' + time + '</span> ' +
-            '<span class="fw-bold text-primary">🕒</span>'
-        );
     }
 
-    updateDashboardTime();
-    setInterval(updateDashboardTime, 1000);
+    .reception-dashboard .quick-action-item{
 
-    function setSummaryCounts(todayCount, waitingCount, checkedInCount, readyCount) {
-        if (todayCount !== undefined) {
-            $("#summary-today-count").text(todayCount);
-        }
-        if (waitingCount !== undefined) {
-            $("#summary-waiting-count").text(waitingCount);
-        }
-        if (checkedInCount !== undefined) {
-            $("#summary-checked-in-count").text(checkedInCount);
-        }
-        if (readyCount !== undefined) {
-            $("#summary-ready-count").text(readyCount);
-        }
+        flex:1 1 30%;
+        min-width:150px;
+
     }
 
-frappe.call({
-    method: "clinify.reception.get_todays_appointments",
-    callback: function (r) {
+}
 
-        let html = "";
+.reception-dashboard .reception-dashboard-header{
 
-        let totalAppointments = 0;
-        let checkedInCount = 0;
-        let waitingCount = 0;
+    background:#007be0;
+    color:#fff;
 
-        if (!r.message || r.message.length === 0) {
-            html = "<p>No appointments today.</p>";
-        } else {
+    display:flex;
+    align-items:center;
 
-            totalAppointments = r.message.length;
+    margin-bottom:1.5rem;
 
-            r.message.forEach(function (appt) {
+    min-height:84px;
 
-                const status = appt.custom_reception_status || "Waiting";
+    padding:1.5rem;
 
-                if (status === "Checked In") {
-                    checkedInCount += 1;
-                } else if (status !== "Ready for Billing") {
-                    waitingCount += 1;
-                }
+}
 
+.reception-dashboard .reception-dashboard-header h3{
 
-  html += `
-    <div class="border-bottom py-3">
+    color:#fff;
+    margin:0;
 
-        <div class="d-flex justify-content-between align-items-start gap-3">
+}
 
-            <div class="flex-grow-1">
-                <div class="mb-1"><strong>${appt.patient_name}</strong></div>
-                <div class="text-secondary mb-2">🩺 Dr. ${appt.doctor_name || "-"}</div>
-                <div class="fw-bold mb-2">🕒 ${appt.appointment_time}</div>
-                <span class="badge" style="background:${appt.journey_color}; color:white; font-size:0.95rem; padding:0.65em 0.9em;">
-                    ${appt.journey_label}
-                </span>
-            </div>
+.reception-dashboard .reception-summary-card .card-body{
 
-            <div class="text-end">
-                ${
-                    status === "Checked In"
-                    ?
-                    `<button class="btn btn-sm btn-success" disabled>
-                        ✓ Checked In
-                    </button>`
-                    :
-                    `<button
-                        class="btn btn-sm btn-primary check-in-btn"
-                        data-appointment="${appt.name}">
-                        Check In
-                    </button>`
-                }
+    padding:.875rem 1.25rem;
+
+}
+
+.reception-dashboard .summary-card-content{
+
+    gap:1.25rem;
+
+}
+
+.reception-dashboard .summary-icon-circle{
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    width:76px;
+    height:76px;
+
+    flex:0 0 76px;
+
+    border-radius:50%;
+
+    background:#f8f9fa;
+
+}
+
+.reception-dashboard .summary-icon{
+
+    font-size:2.75rem;
+
+}
+
+.reception-dashboard .summary-metric{
+
+    font-size:36px;
+
+}
+
+</style>
+
+<div class="reception-dashboard-header">
+
+    <h3 class="fw-bold">
+
+        Reception Dashboard
+
+    </h3>
+
+</div>
+
+<div class="row mb-3">
+
+    <div class="col-md-12 text-md-end">
+
+        <span
+            id="dashboard-timestamp"
+            class="d-inline-flex align-items-center rounded-3"
+            style="background:#fff3cd;padding:10px 18px;font-weight:700;">
+
+            <span class="fw-bold text-primary me-2">📅</span>
+
+            <span
+                class="fw-bold text-primary me-2"
+                id="dashboard-day">
+                Wednesday
+            </span>
+
+            <span class="fw-bold text-dark me-2">|</span>
+
+            <span
+                class="fw-bold text-dark me-2"
+                id="dashboard-date">
+                13 Jul 2026
+            </span>
+
+            <span class="fw-bold text-dark me-2">|</span>
+
+            <span
+                class="fw-bold text-dark"
+                id="dashboard-time">
+                10:42 AM
+            </span>
+
+            <span class="fw-bold text-primary ms-2">🕒</span>
+
+        </span>
+
+    </div>
+
+</div>
+
+<div class="row mb-3">
+
+    <div class="col-md-3">
+
+        <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+
+            <div class="card-body d-flex align-items-center summary-card-content">
+
+                <div class="summary-icon-circle">
+
+                    <span class="summary-icon">👥</span>
+
+                </div>
+
+                <div>
+
+                    <div class="text-uppercase fw-bold mb-2">
+
+                        Today's Patients
+
+                    </div>
+
+                    <div
+                        id="summary-today-count"
+                        class="fw-bold summary-metric">
+
+                        0
+
+                    </div>
+
+                </div>
+
             </div>
 
         </div>
 
     </div>
+    <div class="col-md-3">
+
+        <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+
+            <div class="card-body d-flex align-items-center summary-card-content">
+
+                <div class="summary-icon-circle">
+                    <span class="summary-icon">⏳</span>
+                </div>
+
+                <div>
+
+                    <div class="text-uppercase fw-bold mb-2">
+                        Waiting
+                    </div>
+
+                    <div
+                        id="summary-waiting-count"
+                        class="fw-bold summary-metric">
+
+                        0
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-3">
+
+        <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+
+            <div class="card-body d-flex align-items-center summary-card-content">
+
+                <div class="summary-icon-circle">
+                    <span class="summary-icon">✅</span>
+                </div>
+
+                <div>
+
+                    <div class="text-uppercase fw-bold mb-2">
+                        Checked In
+                    </div>
+
+                    <div
+                        id="summary-checked-in-count"
+                        class="fw-bold summary-metric">
+
+                        0
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-3">
+
+        <div class="card mb-3 shadow-sm rounded-3 h-100 reception-summary-card">
+
+            <div class="card-body d-flex align-items-center summary-card-content">
+
+                <div class="summary-icon-circle">
+                    <span class="summary-icon">💚</span>
+                </div>
+
+                <div>
+
+                    <div class="text-uppercase fw-bold mb-2">
+                        Ready for Billing
+                    </div>
+
+                    <div
+                        id="summary-ready-count"
+                        class="fw-bold summary-metric">
+
+                        0
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="row mb-3">
+
+    <div class="col-md-12">
+
+        <div class="card mb-3 shadow-sm">
+
+            <div class="card-body">
+
+                <div class="quick-actions-container">
+
+                    ${quickActions.map(function(action){
+
+                        return `
+
+                        <div class="quick-action-item">
+
+                            <button
+                                type="button"
+                                class="quick-action-card quick-action-card--${action.theme} shadow-sm rounded-3 ${action.buttonClass}">
+
+                                <div>
+
+                                    <div class="quick-action-icon-circle">
+
+                                        <i class="fa ${action.icon} quick-action-icon"></i>
+
+                                    </div>
+
+                                    <div class="quick-action-label">
+
+                                        ${action.label}
+
+                                    </div>
+
+                                </div>
+
+                            </button>
+
+                        </div>
+
+                        `;
+
+                    }).join("")}
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div class="col-md-6">
+
+        <div class="card mb-3">
+
+            <div class="card-body">
+
+                <h4>Today's Appointments</h4>
+
+                <div id="appointments-list">
+
+                    Loading...
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+    <div class="col-md-6">
+
+        <div class="card mb-3">
+
+            <div class="card-body">
+
+                <h4>
+                    Billing Queue
+                    <span
+                        id="billing-count"
+                        class="badge bg-primary ms-2">
+                        0
+                    </span>
+                </h4>
+
+                <div id="billing-list">
+                    Loading...
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div class="col-md-12">
+
+        <div class="card mb-3">
+
+            <div class="card-body">
+
+                <h4>Ready for Billing</h4>
+
+                <div id="ready-for-billing-list">
+
+                    <div class="table-responsive">
+
+                        <table class="table table-borderless table-sm table-hover align-middle mb-0">
+
+                            <thead class="text-uppercase">
+
+                                <tr>
+
+                                    <th class="fw-bold">👤 Patient</th>
+
+                                    <th class="fw-bold">🩺 Doctor</th>
+
+                                    <th class="fw-bold">🕒 Time</th>
+
+                                    <th class="fw-bold">Status</th>
+
+                                    <th class="fw-bold">Action</th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody>
+
+                                <tr>
+
+                                    <td colspan="5">
+
+                                        Loading...
+
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</div>
+
+`);
+
+function updateDashboardTime() {
+
+    const now = new Date();
+
+    const day = now.toLocaleDateString(
+        "en-US",
+        { weekday: "long" }
+    );
+
+    const date = now.toLocaleDateString(
+        "en-GB",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        }
+    );
+
+    const time = now.toLocaleTimeString(
+        "en-US",
+        {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true
+        }
+    );
+
+    $("#dashboard-timestamp").html(
+
+        '<span class="fw-bold text-primary">📅</span> ' +
+
+        '<span class="fw-bold text-primary">' +
+
+        day +
+
+        '</span> ' +
+
+        '<span class="mx-3 fw-bold text-dark">|</span>' +
+
+        '<span class="fw-bold text-dark">' +
+
+        date +
+
+        '</span> ' +
+
+        '<span class="mx-3 fw-bold text-dark">|</span>' +
+
+        '<span class="fw-bold text-dark">' +
+
+        time +
+
+        '</span> ' +
+
+        '<span class="fw-bold text-primary">🕒</span>'
+
+    );
+
+}
+
+updateDashboardTime();
+
+setInterval(updateDashboardTime, 1000);
+
+function setSummaryCounts(
+    todayCount,
+    waitingCount,
+    checkedInCount,
+    readyCount
+) {
+
+    if (todayCount !== undefined) {
+        $("#summary-today-count").text(todayCount);
+    }
+
+    if (waitingCount !== undefined) {
+        $("#summary-waiting-count").text(waitingCount);
+    }
+
+    if (checkedInCount !== undefined) {
+        $("#summary-checked-in-count").text(checkedInCount);
+    }
+
+    if (readyCount !== undefined) {
+        $("#summary-ready-count").text(readyCount);
+    }
+
+}
+
+function loadDashboardSummary() {
+
+    frappe.call({
+
+        method: "clinify.reception.get_dashboard_summary",
+
+        callback: function (r) {
+
+            if (!r.message) {
+                return;
+            }
+
+            setSummaryCounts(
+                r.message.today,
+                r.message.waiting,
+                r.message.checked_in,
+                r.message.ready_for_billing
+            );
+
+        }
+
+    });
+
+}
+
+loadDashboardSummary();
+frappe.call({
+
+    method: "clinify.reception.get_todays_appointments",
+
+    callback: function (r) {
+
+        let html = "";
+
+        if (!r.message || r.message.length === 0) {
+
+            html = "<p>No appointments today.</p>";
+
+        } else {
+
+            r.message.forEach(function (appt) {
+
+                const status =
+                    appt.custom_reception_status || "Waiting";
+
+                html += `
+
+<div class="border-bottom py-3">
+
+    <div class="d-flex justify-content-between align-items-start gap-3">
+
+        <div class="flex-grow-1">
+
+            <div class="mb-1">
+
+                <strong>${appt.patient_name}</strong>
+
+            </div>
+
+            <div class="text-secondary mb-2">
+
+                🩺 Dr. ${appt.doctor_name || "-"}
+
+            </div>
+
+            <div class="fw-bold mb-2">
+
+                🕒 ${appt.appointment_time}
+
+            </div>
+
+            <span
+                class="badge"
+                style="
+                    background:${appt.journey_color};
+                    color:white;
+                    font-size:.95rem;
+                    padding:.65em .9em;
+                ">
+
+                ${appt.journey_label}
+
+            </span>
+
+        </div>
+
+        <div class="text-end">
+
+            ${
+                status === "Checked In"
+
+                ?
+
+                `
+                <button
+                    class="btn btn-sm btn-success"
+                    disabled>
+
+                    ✓ Checked In
+
+                </button>
+                `
+
+                :
+
+                `
+                <button
+                    class="btn btn-sm btn-primary check-in-btn"
+                    data-appointment="${appt.name}">
+
+                    Check In
+
+                </button>
+                `
+            }
+
+        </div>
+
+    </div>
+
+</div>
+
 `;
 
-           });
+            });
 
         }
 
         $("#appointments-list").html(html);
-        setSummaryCounts(totalAppointments, waitingCount, checkedInCount);
+
     }
+
 });
 
 frappe.call({
+
     method: "clinify.reception.get_billing_queue",
+
     callback: function (r) {
 
         let html = "";
+
         $("#billing-count").text(
-    (r.message || []).length
-);
+
+            (r.message || []).length
+
+        );
 
         if (!r.message || r.message.length === 0) {
 
@@ -510,49 +864,80 @@ frappe.call({
         } else {
 
             r.message.forEach(function (bill, index) {
-let badgeColor = "#0d6efd";
 
-if (bill.workflow_stage === "Draft") {
-    badgeColor = "#ffc107";
-} else if (bill.workflow_stage === "Pending Payment") {
-    badgeColor = "#fd7e14";
-} else if (bill.workflow_stage === "Completed") {
-    badgeColor = "#198754";
-}
+                let badgeColor = "#0d6efd";
 
-html += `
+                if (bill.workflow_stage === "Draft") {
+
+                    badgeColor = "#ffc107";
+
+                }
+
+                else if (
+                    bill.workflow_stage === "Pending Payment"
+                ) {
+
+                    badgeColor = "#fd7e14";
+
+                }
+
+                else if (
+                    bill.workflow_stage === "Completed"
+                ) {
+
+                    badgeColor = "#198754";
+
+                }
+
+                html += `
 <div class="border rounded p-3 mb-3">
 
     <div class="d-flex justify-content-between">
 
         <div>
 
-        <div class="fw-bold fs-6">
-    ${index + 1}.
-    &nbsp;&nbsp;
-    👤 ${bill.patient}
-</div>
+            <div class="fw-bold fs-6">
 
-<div class="fw-bold mt-1">
-    ${bill.customer_name}
-</div>
+                ${index + 1}.
+                &nbsp;&nbsp;
+                👤 ${bill.patient}
+
+            </div>
+
+            <div class="fw-bold mt-1">
+
+                ${bill.customer_name}
+
+            </div>
 
             <div class="text-secondary">
-                🩺 Dr. ${bill.doctor_name || "-"}
-            </div>
-<div class="mt-2">
-    💰 Total : ₹${bill.grand_total}
-</div>
 
-<div class="fw-bold text-danger mt-1">
-    💵 Due : ₹${bill.outstanding_amount}
-</div>
-</div>
-<div class="text-end">
+                🩺 Dr. ${bill.doctor_name || "-"}
+
+            </div>
+
+            <div class="mt-2">
+
+                💰 Total : ₹${bill.grand_total}
+
+            </div>
+
+            <div class="fw-bold text-danger mt-1">
+
+                💵 Due : ₹${bill.outstanding_amount}
+
+            </div>
+
+        </div>
+
+        <div class="text-end">
+
             <span
                 class="badge"
                 style="background:${badgeColor};padding:8px 12px;">
+
                 ${bill.workflow_stage}
+
             </span>
 
             <br><br>
@@ -560,7 +945,9 @@ html += `
             <button
                 class="btn btn-sm btn-primary view-invoice-btn"
                 data-invoice="${bill.name}">
+
                 View Invoice
+
             </button>
 
         </div>
@@ -568,18 +955,23 @@ html += `
     </div>
 
 </div>
+
 `;
-});
+
+            });
 
         }
 
         $("#billing-list").html(html);
 
     }
+
 });
 
 frappe.call({
+
     method: "clinify.reception.get_ready_for_billing",
+
     callback: function (r) {
 
         let html = "";
@@ -591,62 +983,93 @@ frappe.call({
         } else {
 
             html += `
-                <div class="table-responsive">
-                    <table class="table table-borderless table-sm table-hover align-middle mb-0">
-                        <tbody>
-            `;
+
+<div class="table-responsive">
+
+<table class="table table-borderless table-sm table-hover align-middle mb-0">
+
+<tbody>
+
+`;
 
             r.message.forEach(function (appt) {
 
                 html += `
-                            <tr>
-                                <td class="align-middle py-3 fs-6">
-                                    <strong>${appt.patient_name}</strong>
-                                </td>
-                                <td class="align-middle py-3 text-secondary fs-6">
-                                    Dr. ${appt.doctor_name || "-"}
-                                </td>
-                                <td class="align-middle py-3 fw-bold fs-6">
-                                    ${appt.appointment_time}
-                                </td>
-                                <td class="align-middle py-3">
-                                    <span class="badge badge-success rounded-pill" style="font-size:0.92rem; padding:0.55em 0.85em;">Ready</span>
-                                </td>
-                                <td class="align-middle py-3">
-                                    <button
-                                        class="btn btn-sm btn-outline-primary create-invoice-btn"
-                                        data-appointment="${appt.name}"
-                                        style="min-width:120px;">
-                                        🧾 Create Invoice
-                                    </button>
-                                </td>
-                            </tr>
-                `;
+
+<tr>
+
+    <td class="align-middle py-3 fs-6">
+
+        <strong>${appt.patient_name}</strong>
+
+    </td>
+
+    <td class="align-middle py-3 text-secondary fs-6">
+
+        Dr. ${appt.doctor_name || "-"}
+
+    </td>
+
+    <td class="align-middle py-3 fw-bold fs-6">
+
+        ${appt.appointment_time}
+
+    </td>
+
+    <td class="align-middle py-3">
+
+        <span
+            class="badge badge-success rounded-pill"
+            style="font-size:.92rem;padding:.55em .85em;">
+
+            Ready
+
+        </span>
+
+    </td>
+
+    <td class="align-middle py-3">
+
+        <button
+            class="btn btn-sm btn-outline-primary create-invoice-btn"
+            data-appointment="${appt.name}"
+            style="min-width:120px;">
+
+            🧾 Create Invoice
+
+        </button>
+
+    </td>
+
+</tr>
+
+`;
 
             });
 
             html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
+
+</tbody>
+
+</table>
+
+</div>
+
+`;
 
         }
 
         $("#ready-for-billing-list").html(html);
-        setSummaryCounts(undefined, undefined, undefined, (r.message || []).length);
 
     }
+
 });
 
 };
-
 function refreshReceptionDashboard() {
-    frappe.set_route("reception-dashboard");
 
-    setTimeout(function () {
-        window.location.reload();
-    }, 100);
+    window.location.reload();
+
 }
 
 $(document).on("click", ".check-in-btn", function () {
@@ -654,14 +1077,20 @@ $(document).on("click", ".check-in-btn", function () {
     const appointment = $(this).data("appointment");
 
     frappe.call({
+
         method: "clinify.reception.check_in_patient",
+
         args: {
             appointment: appointment
         },
+
         callback: function () {
-    refreshReceptionDashboard();
-}
-     });
+
+            refreshReceptionDashboard();
+
+        }
+
+    });
 
 });
 
@@ -680,26 +1109,41 @@ $(document).on("click", ".quick-action-patient-btn", function () {
 $(document).on("click", ".quick-action-yesterday-btn", function () {
 
     frappe.route_options = {
-        appointment_date: frappe.datetime.add_days(frappe.datetime.get_today(), -1)
+        appointment_date: frappe.datetime.add_days(
+            frappe.datetime.get_today(),
+            -1
+        )
     };
 
-    frappe.set_route("List", "Patient Appointment");
+    frappe.set_route(
+        "List",
+        "Patient Appointment"
+    );
 
 });
 
 $(document).on("click", ".quick-action-tomorrow-btn", function () {
 
     frappe.route_options = {
-        appointment_date: frappe.datetime.add_days(frappe.datetime.get_today(), 1)
+        appointment_date: frappe.datetime.add_days(
+            frappe.datetime.get_today(),
+            1
+        )
     };
 
-    frappe.set_route("List", "Patient Appointment");
+    frappe.set_route(
+        "List",
+        "Patient Appointment"
+    );
 
 });
 
 $(document).on("click", ".quick-action-doctor-btn", function () {
 
-    frappe.set_route("List", "Healthcare Practitioner");
+    frappe.set_route(
+        "List",
+        "Healthcare Practitioner"
+    );
 
 });
 
@@ -714,24 +1158,20 @@ $(document).on("click", ".quick-action-accounts-btn", function () {
 
 $(document).on("click", ".patient-btn", function () {
 
-    const patient = $(this).data("patient");
-
     frappe.set_route(
         "Form",
         "Patient",
-        patient
+        $(this).data("patient")
     );
 
 });
 
 $(document).on("click", ".view-invoice-btn", function () {
 
-    const invoice = $(this).data("invoice");
-
     frappe.set_route(
         "Form",
         "Sales Invoice",
-        invoice
+        $(this).data("invoice")
     );
 
 });
@@ -741,40 +1181,65 @@ $(document).on("click", ".create-invoice-btn", function () {
     const appointment = $(this).data("appointment");
 
     const button = $(this);
-    button.prop("disabled", true).text("Creating...");
+
+    button
+        .prop("disabled", true)
+        .text("Creating...");
 
     frappe.call({
+
         method: "clinify.reception.create_invoice_from_ready_appointment",
+
         args: {
             appointment: appointment
         },
-   callback: function (r) {
 
-    if (r.message && r.message.success) {
+        callback: function (r) {
 
-        frappe.show_alert({
-            message: __("Invoice Created Successfully"),
-            indicator: "green"
-        });
+            if (r.message && r.message.success) {
 
-        frappe.set_route(
-            "Form",
-            "Sales Invoice",
-            r.message.invoice
-        );
+                frappe.show_alert({
 
-    } else {
+                    message: __("Invoice Created Successfully"),
 
-        button.prop("disabled", false).text("🧾 Create Invoice");
+                    indicator: "green"
 
-        frappe.msgprint(
-            "Failed to create invoice. Please check the appointment mapping."
-        );
-    }
-},
+                });
+
+                frappe.set_route(
+
+                    "Form",
+
+                    "Sales Invoice",
+
+                    r.message.invoice
+
+                );
+
+            } else {
+
+                button
+                    .prop("disabled", false)
+                    .text("🧾 Create Invoice");
+
+                frappe.msgprint(
+
+                    __("Failed to create invoice.")
+
+                );
+
+            }
+
+        },
+
         error: function () {
-            button.prop("disabled", false).text("🧾 Create Invoice");
+
+            button
+                .prop("disabled", false)
+                .text("🧾 Create Invoice");
+
         }
+
     });
 
 });
