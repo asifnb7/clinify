@@ -13,7 +13,10 @@ def _get_or_create_treatment_plan(doc):
     except Exception:
         return None
 
-    if getattr(appointment, "reference_doctype", None) and getattr(appointment, "reference_docname", None):
+    if (
+        getattr(appointment, "reference_doctype", None)
+        and getattr(appointment, "reference_docname", None)
+    ):
         return appointment.reference_docname
 
     plan = frappe.new_doc("Dental Treatment Plan")
@@ -28,8 +31,9 @@ def _get_or_create_treatment_plan(doc):
 
     return plan.name
 
+
 def _append_planned_procedure(doc, plan_name):
-    """Append one planned procedure row to the Dental Treatment Plan."""
+    """Append completed procedures to the Dental Treatment Plan."""
 
     if not plan_name:
         return
@@ -46,40 +50,75 @@ def _append_planned_procedure(doc, plan_name):
     ):
         return
 
-    # Procedure Type is mandatory
-    if not getattr(doc, "custom_procedure_type", None):
-        frappe.throw(
-            "Please select a Procedure Type before saving the Encounter."
+    # -------------------------------------------------------
+    # DS2 : Multi Dental Service workflow
+    # -------------------------------------------------------
+
+    if getattr(doc, "custom_dental_services", None):
+
+        for service in doc.custom_dental_services:
+
+            if not service.dental_service:
+                continue
+
+            dental_service = frappe.get_doc(
+                "Dental Service",
+                service.dental_service,
+            )
+
+            qty = service.qty or 1
+
+            for _ in range(int(qty)):
+
+                plan.append(
+                    "dental_planned_procedures",
+                    {
+                        "procedure_type": dental_service.service_name,
+                        "tooth_number": service.tooth_area,
+                        "tooth_surface": "O",
+                        "planned_status": "Completed",
+                        "linked_encounter": doc.name,
+                    },
+                )
+
+    # -------------------------------------------------------
+    # Legacy Single Procedure Workflow
+    # -------------------------------------------------------
+
+    else:
+
+        if not getattr(doc, "custom_procedure_type", None):
+            frappe.throw(
+                "Please select at least one Dental Service."
+            )
+
+        plan.append(
+            "dental_planned_procedures",
+            {
+                "procedure_type": doc.custom_procedure_type,
+                "tooth_number": doc.custom_tooth_area,
+                "tooth_surface": "O",
+                "planned_status": "Completed",
+                "linked_encounter": doc.name,
+            },
         )
 
-    plan.append(
-        "dental_planned_procedures",
-        {
-            "procedure_type": doc.custom_procedure_type,
-            "tooth_number": doc.custom_tooth_area,
-            "tooth_surface": "O",
-            "planned_status": "Completed",
-            "linked_encounter": doc.name,
-        },
-    )
-
+    # Save only once
     plan.save(ignore_permissions=True)
+
 
 def after_save(doc, method=None):
     """
-    When a Dental Patient Encounter is saved, create or reuse a
-    Dental Treatment Plan for the linked Patient Appointment,
-    link the appointment to that plan, and then move the appointment
-    to the Reception Billing Queue.
-
-    This handler is intentionally idempotent so repeated saves
-    do not perform unnecessary database writes.
+    Create / reuse Dental Treatment Plan,
+    append procedures,
+    and move Appointment to Billing.
     """
 
     if not getattr(doc, "appointment", None):
         return
 
     plan_name = _get_or_create_treatment_plan(doc)
+
     if not plan_name:
         return
 
@@ -88,38 +127,94 @@ def after_save(doc, method=None):
     current_status = frappe.db.get_value(
         "Patient Appointment",
         doc.appointment,
-        "custom_reception_status"
-    )
-    if current_status == "Billing":
-        return
-
-    frappe.db.set_value(
-        "Patient Appointment",
-        doc.appointment,
         "custom_reception_status",
-        "Billing",
-        update_modified=False,
-    )
+
+        )
+    if plan_name:
+        try:
+            create_invoice_from_dental_plan(plan_name)
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                "Automatic Invoice Creation"
+            )  
+
+    if current_status != "Billing":
+
+        frappe.db.set_value(
+            "Patient Appointment",
+            doc.appointment,
+            "custom_reception_status",
+            "Billing",
+            update_modified=False,
+        )
+
 
 def before_insert(doc, method=None):
     """
-    Populate Clinify-specific practitioner_department before insert.
+    Populate practitioner_department automatically.
     """
 
     if getattr(doc, "practitioner_department", None):
         return
 
-    department = getattr(doc, "department", None)
-    if department:
-        doc.practitioner_department = department
+    if getattr(doc, "department", None):
+        doc.practitioner_department = doc.department
         return
 
-    practitioner = getattr(doc, "practitioner", None)
-    if practitioner:
-        practitioner_department = frappe.db.get_value(
+    if getattr(doc, "practitioner", None):
+
+        department = frappe.db.get_value(
             "Healthcare Practitioner",
-            practitioner,
+            doc.practitioner,
             "department",
         )
-        if practitioner_department:
-            doc.practitioner_department = practitioner_department
+
+        if department:
+            doc.practitioner_department = department
+
+            import frappe
+
+from clinify.billing import create_invoice_from_dental_plan
+
+
+@frappe.whitelist()
+def create_invoice_from_encounter(encounter_name):
+    """
+    Create a Sales Invoice for the submitted Encounter.
+    Reuses the existing Dental Billing engine.
+    """
+
+    encounter = frappe.get_doc("Patient Encounter", encounter_name)
+
+    if not encounter.appointment:
+        frappe.throw("This Encounter is not linked to an Appointment.")
+
+    appointment = frappe.get_doc(
+        "Patient Appointment",
+        encounter.appointment
+    )
+
+    if (
+        appointment.reference_doctype != "Dental Treatment Plan"
+        or not appointment.reference_docname
+    ):
+        frappe.throw(
+            "No Dental Treatment Plan is linked to this Appointment."
+        )
+
+    invoice = create_invoice_from_dental_plan(
+        appointment.reference_docname
+    )
+
+    # Store invoice reference on Appointment
+    frappe.db.set_value(
+        "Patient Appointment",
+        appointment.name,
+        "ref_sales_invoice",
+        invoice
+    )
+
+    frappe.db.commit()
+
+    return invoice

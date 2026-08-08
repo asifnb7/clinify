@@ -11,6 +11,8 @@
   "service_name",
   "erpnext_item",
   "is_active",
+  "default_qty",
+  "requires_tooth",
   "description"
  ],
  "fields": [
@@ -51,12 +53,24 @@
    "fieldname": "description",
    "fieldtype": "Small Text",
    "label": "Description"
+  },
+  {
+   "default": "1",
+   "fieldname": "default_qty",
+   "fieldtype": "Int",
+   "label": "Default Quantity"
+  },
+  {
+   "default": "Unchecked",
+   "fieldname": "requires_tooth",
+   "fieldtype": "Check",
+   "label": "Requires Tooth"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-02 23:58:17.307413",
+ "modified": "2026-08-06 20:25:21.293968",
  "modified_by": "Administrator",
  "module": "Clinify",
  "name": "Dental Service",
@@ -74,12 +88,19 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Physician"
   }
  ],
  "row_format": "Dynamic",
  "rows_threshold_for_grid_search": 20,
+ "search_fields": "service_name,service_code",
+ "show_title_field_in_link": 1,
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
+ "title_field": "service_name",
  "track_changes": 1
 }

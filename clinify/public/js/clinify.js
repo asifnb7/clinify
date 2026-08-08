@@ -1,10 +1,18 @@
 console.log("Clinify JS Loaded");
 
+/*
+ * ---------------------------------------------------------
+ * Global Clinify Route Handling
+ * ---------------------------------------------------------
+ */
+
 frappe.router.on("change", () => {
 
     const route = frappe.get_route();
 
-    if (!route || !route.length) return;
+    if (!route || !route.length) {
+        return;
+    }
 
     console.log("Route:", route);
 
@@ -14,4 +22,5 @@ frappe.router.on("change", () => {
 
         frappe.set_route("reception-dashboard");
     }
+
 });

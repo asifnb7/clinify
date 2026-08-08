@@ -134,45 +134,60 @@ def check_in_patient(appointment):
         "status": appt.custom_reception_status
     }
 
-
 @frappe.whitelist()
 def get_ready_for_billing():
     """
-    Return today's appointments that are ready
-    for billing but have not yet been invoiced.
+    Return today's appointments that have at least one
+    completed but unbilled Dental Planned Procedure.
     """
 
     from clinify.scripts.dev import doctor_name
 
     appointments = frappe.get_all(
         "Patient Appointment",
-    
- filters={
-    "appointment_date": nowdate(),
-    "custom_reception_status": "Billing",
-    "docstatus": ["!=", 2],
-    "ref_sales_invoice": ["in", ["", None]],
-},
-
+        filters={
+            "custom_reception_status": "Billing",
+            "docstatus": ["!=", 2],
+            "reference_doctype": "Dental Treatment Plan",
+        },
         fields=[
             "name",
             "patient",
             "patient_name",
             "appointment_time",
             "practitioner",
+            "reference_docname",
             "custom_reception_status",
         ],
         order_by="appointment_time asc",
     )
 
+    ready = []
+
     for appt in appointments:
+
+        if not appt.reference_docname:
+            continue
+
+        unbilled = frappe.db.exists(
+            "Dental Planned Procedure",
+            {
+                "parent": appt.reference_docname,
+                "planned_status": "Completed",
+                "billed_invoice": ["is", "not set"],
+            },
+        )
+
+        if not unbilled:
+            continue
 
         appt["doctor_name"] = doctor_name(
             appt.get("practitioner")
         )
 
-    return appointments
+        ready.append(appt)
 
+    return ready
 
 @frappe.whitelist()
 def create_invoice_from_ready_appointment(appointment):
