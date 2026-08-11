@@ -1,4 +1,5 @@
 import frappe
+
 from clinify.billing import create_invoice_from_dental_plan
 
 def _get_or_create_treatment_plan(doc):
@@ -106,64 +107,7 @@ def _append_planned_procedure(doc, plan_name):
     # Save only once
     plan.save(ignore_permissions=True)
 
-    invoice_name = None
 
-    try:
-
-        invoice_name = create_invoice_from_dental_plan(
-            plan_name
-        )
-
-    except Exception:
-
-        # If Draft Invoice already exists,
-        # fetch it from the Treatment Plan.
-
-        invoice_name = frappe.db.get_value(
-            "Dental Planned Procedure",
-            {
-                "parent": plan_name,
-                "billed_invoice": ["is", "set"],
-            },
-             "billed_invoice",
-        )
-
-        if not invoice_name:
-
-            frappe.log_error(
-                frappe.get_traceback(),
-                "Automatic Draft Invoice Creation",
-            )
-
-            frappe.msgprint(
-                "Unable to create Draft Invoice. Please contact Administrator."
-            )
-
-            return
-
-         # -------------------------------------------------
-         # Link Draft Invoice
-         # -------------------------------------------------
-
-            frappe.db.set_value(
-               "Patient Appointment",
-            doc.appointment,
-            "ref_sales_invoice",
-            invoice_name,
-            update_modified=False,
-        )
-
-        # -------------------------------------------------
-        # Move Appointment to Billing
-        # -------------------------------------------------
-
-        frappe.db.set_value(
-            "Patient Appointment",
-            doc.appointment,
-            "custom_reception_status",
-            "Billing",
-            update_modified=False,
-        )
 def after_save(doc, method=None):
     """
     Doctor saves the Encounter.
@@ -172,8 +116,8 @@ def after_save(doc, method=None):
         1. Create / Reuse Dental Treatment Plan
         2. Synchronize Planned Procedures
         3. Create Draft Invoice
-        4. Link Draft Invoice to Appointment
-        5. Move Appointment to Billing
+        4. Link Invoice to Appointment
+        5. Move Appointment to View Invoice
     """
 
     if not getattr(doc, "appointment", None):
@@ -191,82 +135,42 @@ def after_save(doc, method=None):
     # -------------------------------------------------
     # Synchronize Planned Procedures
     # -------------------------------------------------
-    # -------------------------------------------------
-    # Check whether Appointment already has an Invoice
-    # -------------------------------------------------
 
-    existing_invoice = frappe.db.get_value(
-        "Patient Appointment",
-        doc.appointment,
-        "ref_sales_invoice",
-    )
-
-    invoice_name = existing_invoice
+    _append_planned_procedure(doc, plan_name)
 
     # -------------------------------------------------
-    # Create Draft Invoice only if one does not exist
+    # Create Draft Invoice
     # -------------------------------------------------
 
+    try:
+        invoice_name = create_invoice_from_encounter(doc.name)
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "Automatic Invoice Creation",
+        )
+
+        frappe.msgprint(
+            "Automatic draft invoice could not be created. "
+            "Please contact the administrator."
+        )
+        return
     if not invoice_name:
-
-        try:
-
-            invoice_name = create_invoice_from_dental_plan(
-                plan_name
-            )
-
-        except Exception:
-
-            # Invoice may already exist because the
-            # Dental Billing engine prevents duplicates.
-
-            invoice_name = frappe.db.get_value(
-                "Dental Planned Procedure",
-                {
-                    "parent": plan_name,
-                    "billed_invoice": ["is", "set"],
-                },
-                "billed_invoice",
-            )
-
-            if not invoice_name:
-
-                frappe.log_error(
-                    frappe.get_traceback(),
-                    "Automatic Draft Invoice Creation",
-                )
-
-                frappe.msgprint(
-                    "Unable to create Draft Invoice. Please contact Administrator."
-                )
-
-                return
-                # -------------------------------------------------
-    # Link Invoice to Appointment
+        return
     # -------------------------------------------------
-
-    frappe.db.set_value(
-        "Patient Appointment",
-        doc.appointment,
-        "ref_sales_invoice",
-        invoice_name,
-        update_modified=False,
-    )
-
-    # -------------------------------------------------
-    # Move Appointment to Billing
+    # Move Appointment to View Invoice
     # -------------------------------------------------
 
     frappe.db.set_value(
         "Patient Appointment",
         doc.appointment,
         "custom_reception_status",
-        "Billing",
+        "View Invoice",
         update_modified=False,
     )
 
     frappe.db.commit()
-            
+    
 def before_insert(doc, method=None):
     """
     Populate practitioner_department automatically.
@@ -289,109 +193,6 @@ def before_insert(doc, method=None):
 
         if department:
             doc.practitioner_department = department
-
-def after_save(doc, method=None):
-    """
-    Doctor saves the Encounter.
-
-    Workflow:
-        1. Create / Reuse Dental Treatment Plan
-        2. Synchronize Planned Procedures
-        3. Create Draft Invoice
-        4. Link Draft Invoice to Appointment
-        5. Move Appointment to Billing
-    """
-
-    if not getattr(doc, "appointment", None):
-        return
-
-    # -------------------------------------------------
-    # Create / Reuse Treatment Plan
-    # -------------------------------------------------
-
-    plan_name = _get_or_create_treatment_plan(doc)
-
-    if not plan_name:
-        return
-
-    # -------------------------------------------------
-    # Synchronize Planned Procedures
-    # -------------------------------------------------
-
-    _append_planned_procedure(doc, plan_name)
-
-    # -------------------------------------------------
-    # Check whether Appointment already has an Invoice
-    # -------------------------------------------------
-
-    invoice_name = frappe.db.get_value(
-        "Patient Appointment",
-        doc.appointment,
-        "ref_sales_invoice",
-    )
-
-    # -------------------------------------------------
-    # Create Draft Invoice only if one does not exist
-    # -------------------------------------------------
-
-    if not invoice_name:
-
-        try:
-            invoice_name = create_invoice_from_dental_plan(
-                plan_name
-            )
-
-        except Exception:
-
-            # The billing engine may already have created
-            # the invoice. Retrieve it from the Treatment Plan.
-
-            invoice_name = frappe.db.get_value(
-                "Dental Planned Procedure",
-                {
-                    "parent": plan_name,
-                    "billed_invoice": ["is", "set"],
-                },
-                "billed_invoice",
-            )
-
-            if not invoice_name:
-                frappe.log_error(
-                    frappe.get_traceback(),
-                    "Automatic Draft Invoice Creation",
-                )
-
-                frappe.msgprint(
-                    "Unable to create Draft Invoice. Please contact Administrator."
-                )
-
-                return
-
-    # -------------------------------------------------
-    # Link Invoice to Appointment
-    # -------------------------------------------------
-
-    frappe.db.set_value(
-        "Patient Appointment",
-        doc.appointment,
-        "ref_sales_invoice",
-        invoice_name,
-        update_modified=False,
-    )
-
-    # -------------------------------------------------
-    # Move Appointment to Billing
-    # -------------------------------------------------
-
-    frappe.db.set_value(
-        "Patient Appointment",
-        doc.appointment,
-        "custom_reception_status",
-        "Billing",
-        update_modified=False,
-    )
-
-    frappe.db.commit()
 
 
 @frappe.whitelist()
@@ -428,9 +229,9 @@ def create_invoice_from_encounter(encounter_name):
         "Patient Appointment",
         appointment.name,
         "ref_sales_invoice",
-        invoice
+        invoice,
+        update_modified=False,
     )
 
-    frappe.db.commit()
-
+    
     return invoice
