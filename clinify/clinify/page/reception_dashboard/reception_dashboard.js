@@ -797,33 +797,38 @@ frappe.call({
 
         <div class="text-end">
 
-            ${
-                status === "Checked In"
+             ${
+    status === "Waiting"
 
-                ?
+    ?
 
-                `
-                <button
-                    class="btn btn-sm btn-success"
-                    disabled>
+    `
+    <button
+        class="btn btn-sm btn-primary check-in-btn"
+        data-appointment="${appt.name}">
 
-                    ✓ Checked In
+        Check In
 
-                </button>
-                `
+    </button>
+    `
 
-                :
+    :
 
-                `
-                <button
-                    class="btn btn-sm btn-primary check-in-btn"
-                    data-appointment="${appt.name}">
+    `
+    <span
+        class="badge"
+        style="
+            background:${appt.journey_color};
+            color:white;
+            font-size:.95rem;
+            padding:.65em .9em;
+        ">
 
-                    Check In
+        ${status}
 
-                </button>
-                `
-            }
+    </span>
+    `
+}
 
         </div>
 

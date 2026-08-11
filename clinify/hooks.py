@@ -67,10 +67,10 @@ doc_events = {
         "before_insert": "clinify.patient.assign_clinify_patient_id"
     },
 
-    "Patient Encounter": {
-        "before_insert": "clinify.encounter.before_insert",
-        "on_update": "clinify.encounter.after_save"
-    }
+   "Patient Encounter": {
+    "before_insert": "clinify.encounter.before_insert",
+    "on_update": "clinify.encounter.after_save",
+}
 }
 
 # -----------------------------------------------------------------------------
