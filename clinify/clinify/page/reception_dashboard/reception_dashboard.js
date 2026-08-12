@@ -426,13 +426,13 @@ frappe.pages["reception-dashboard"].on_page_load = function (wrapper) {
             <div class="card-body d-flex align-items-center summary-card-content">
 
                 <div class="summary-icon-circle">
-                    <span class="summary-icon">💚</span>
+                    <span class="summary-icon">🧾</span>
                 </div>
 
                 <div>
 
                     <div class="text-uppercase fw-bold mb-2">
-                        Ready for Billing
+                        Billing
                     </div>
 
                     <div
@@ -555,69 +555,6 @@ frappe.pages["reception-dashboard"].on_page_load = function (wrapper) {
 
 </div>
 
-<div class="row">
-
-    <div class="col-md-12">
-
-        <div class="card mb-3">
-
-            <div class="card-body">
-
-                <h4>Ready for Billing</h4>
-
-                <div id="ready-for-billing-list">
-
-                    <div class="table-responsive">
-
-                        <table class="table table-borderless table-sm table-hover align-middle mb-0">
-
-                            <thead class="text-uppercase">
-
-                                <tr>
-
-                                    <th class="fw-bold">👤 Patient</th>
-
-                                    <th class="fw-bold">🩺 Doctor</th>
-
-                                    <th class="fw-bold">🕒 Time</th>
-
-                                    <th class="fw-bold">Status</th>
-
-                                    <th class="fw-bold">Action</th>
-
-                                </tr>
-
-                            </thead>
-
-                            <tbody>
-
-                                <tr>
-
-                                    <td colspan="5">
-
-                                        Loading...
-
-                                    </td>
-
-                                </tr>
-
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-</div>
 
 `);
 
@@ -938,13 +875,20 @@ frappe.call({
         <div class="text-end">
 
             <span
-                class="badge"
-                style="background:${badgeColor};padding:8px 12px;">
-
-                ${bill.workflow_stage}
-
+             class="badge"
+             style="
+                 background:${badgeColor};
+                 color:${bill.workflow_stage === 'Completed' ? '#ffffff' : '#000000'};
+                 font-size:14px;
+                 font-weight:600;
+                 padding:7px 16px;
+                 border-radius:6px;
+                 display:inline-block;
+                 min-width:110px;
+                 text-align:center;
+             ">
+             ${bill.workflow_stage}
             </span>
-
             <br><br>
 
             <button
@@ -973,102 +917,7 @@ frappe.call({
 
 });
 
-frappe.call({
 
-    method: "clinify.reception.get_ready_for_billing",
-
-    callback: function (r) {
-
-        let html = "";
-
-        if (!r.message || r.message.length === 0) {
-
-            html = "<p>No appointments ready for billing.</p>";
-
-        } else {
-
-            html += `
-
-<div class="table-responsive">
-
-<table class="table table-borderless table-sm table-hover align-middle mb-0">
-
-<tbody>
-
-`;
-
-            r.message.forEach(function (appt) {
-
-                html += `
-
-<tr>
-
-    <td class="align-middle py-3 fs-6">
-
-        <strong>${appt.patient_name}</strong>
-
-    </td>
-
-    <td class="align-middle py-3 text-secondary fs-6">
-
-        Dr. ${appt.doctor_name || "-"}
-
-    </td>
-
-    <td class="align-middle py-3 fw-bold fs-6">
-
-        ${appt.appointment_time}
-
-    </td>
-
-    <td class="align-middle py-3">
-
-        <span
-            class="badge badge-success rounded-pill"
-            style="font-size:.92rem;padding:.55em .85em;">
-
-            Ready
-
-        </span>
-
-    </td>
-
-    <td class="align-middle py-3">
-
-        <button
-            class="btn btn-sm btn-outline-primary create-invoice-btn"
-            data-appointment="${appt.name}"
-            style="min-width:120px;">
-
-            🧾 Create Invoice
-
-        </button>
-
-    </td>
-
-</tr>
-
-`;
-
-            });
-
-            html += `
-
-</tbody>
-
-</table>
-
-</div>
-
-`;
-
-        }
-
-        $("#ready-for-billing-list").html(html);
-
-    }
-
-});
 
 };
 function refreshReceptionDashboard() {

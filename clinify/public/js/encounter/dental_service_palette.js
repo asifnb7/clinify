@@ -4,6 +4,19 @@ frappe.ui.form.on("Patient Encounter", {
 
 refresh(frm) {
 
+    // ------------------------------------------------
+    // Hide legacy Dental workflow
+    // ------------------------------------------------
+    [
+        "get_applicable_treatment_plans",
+        "custom_dental_examination",
+        "custom_procedure_type",
+    ].forEach(function(field) {
+
+        frm.set_df_property(field, "hidden", 1);
+
+    });
+
     if (frm.__clinify_palette_loaded) {
         return;
     }
@@ -11,15 +24,14 @@ refresh(frm) {
     frm.__clinify_palette_loaded = true;
 
     // Draft Encounter → Doctor
-    if (frm.doc.docstatus === 0) {
+    // Dental Service Palette button disabled.
+    // Doctors now use the Dental Services child table directly.
 
-        frm.add_custom_button(__("Select Dental Services"), function () {
-
-            open_dental_palette(frm);
-
-        });
-
-    }
+    // if (frm.doc.docstatus === 0) {
+    //     frm.add_custom_button(__("Select Dental Services"), function () {
+    //         open_dental_palette(frm);
+    //     });
+    // }
 
     // Submitted Encounter → Reception
     if (frm.doc.docstatus === 1) {
