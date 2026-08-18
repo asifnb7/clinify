@@ -57,8 +57,9 @@ override_whitelisted_methods = {}
 app_include_css = "/assets/clinify/theme/css/clinify-theme.css"
 
 app_include_js = "/assets/clinify/js/clinify.js"
+
 doctype_js = {
-    "Patient Encounter": "public/js/encounter/dental_service_palette.js"
+    "Patient Encounter": "public/js/encounter/clinify_encounter.js",
 }
 web_include_css = "/assets/clinify/css/clinify-login.css"
 
@@ -82,4 +83,10 @@ fixtures = [
     "Custom Field",
     "Property Setter",
     "Server Script",
+    {
+        "doctype": "Custom DocPerm",
+        "filters": [
+            ["parent", "=", "Lab Test Template"]
+        ]
+    },
 ]
