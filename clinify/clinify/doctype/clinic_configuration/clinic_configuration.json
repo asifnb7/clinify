@@ -5,19 +5,125 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "section_break_xley"
+  "section_break_xley",
+  "consultation_section",
+  "free_followup_days",
+  "allow_multiple_free_followups",
+  "clinic_identity_section",
+  "clinic_name",
+  "clinic_code",
+  "column_break_contact",
+  "clinic_email",
+  "clinic_phone",
+  "address_section",
+  "clinic_address",
+  "city",
+  "state",
+  "country",
+  "pincode",
+  "platform_section",
+  "clinic_status",
+  "subscription_status",
+  "activation_date"
  ],
  "fields": [
   {
    "fieldname": "section_break_xley",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "clinic_identity_section",
+   "fieldtype": "Section Break",
+   "label": "Clinic Identity"
+  },
+  {
+   "fieldname": "clinic_name",
+   "fieldtype": "Data",
+   "label": "Clinic Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "clinic_code",
+   "fieldtype": "Data",
+   "label": "Clinic Code",
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_contact",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "clinic_email",
+   "fieldtype": "Data",
+   "label": "Clinic Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "clinic_phone",
+   "fieldtype": "Data",
+   "label": "Clinic Phone"
+  },
+  {
+   "fieldname": "address_section",
+   "fieldtype": "Section Break",
+   "label": "Clinic Address"
+  },
+  {
+   "fieldname": "clinic_address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
+  },
+  {
+   "fieldname": "platform_section",
+   "fieldtype": "Section Break",
+   "label": "Platform & Subscription"
+  },
+  {
+   "default": "Active",
+   "fieldname": "clinic_status",
+   "fieldtype": "Select",
+   "label": "Clinic Status",
+   "options": "\nActive\nInactive\nSuspended"
+  },
+  {
+   "default": "Trial",
+   "fieldname": "subscription_status",
+   "fieldtype": "Select",
+   "label": "Subscription Status",
+   "options": "\nTrial\nActive\nExpired\nSuspended"
+  },
+  {
+   "fieldname": "activation_date",
+   "fieldtype": "Date",
+   "label": "Activation Date"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-01 16:55:47.786726",
+ "modified": "2026-08-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Clinify",
  "name": "Clinic Configuration",
