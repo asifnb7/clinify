@@ -1,7 +1,7 @@
 {
  "charts": [],
- "content": "[]",
- "creation": "2026-07-31 14:59:44.777838",
+ "content": "[{\"id\":\"platform-admin-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Platform Admin</b></span>\",\"col\":12}},{\"id\":\"clinic-configuration-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Clinic Configuration\",\"col\":3}},{\"id\":\"clinify-subscription-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Clinify Subscription\",\"col\":3}},{\"id\":\"clinify-plan-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Clinify Plan\",\"col\":3}},{\"id\":\"clinify-settings-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Clinify Settings\",\"col\":3}}]",
+ "creation": "2026-08-21 21:29:52.373199",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
@@ -11,8 +11,58 @@
  "indicator_color": "green",
  "is_hidden": 0,
  "label": "Administration",
- "links": [],
- "modified": "2026-07-31 18:02:05.465658",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Platform Admin",
+   "link_count": 0,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Clinic Configuration",
+   "link_count": 0,
+   "link_to": "Clinic Configuration",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Clinify Subscription",
+   "link_count": 0,
+   "link_to": "Clinify Subscription",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Clinify Plan",
+   "link_count": 0,
+   "link_to": "Clinify Plan",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Clinify Settings",
+   "link_count": 0,
+   "link_to": "Clinify Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-21 22:01:42.771632",
  "modified_by": "Administrator",
  "module": "Clinify",
  "name": "Administration",
@@ -22,6 +72,31 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 7.0,
- "shortcuts": [],
+ "shortcuts": [
+  {
+   "doc_view": "",
+   "label": "Clinic Configuration",
+   "link_to": "Clinic Configuration",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Clinify Subscription",
+   "link_to": "Clinify Subscription",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Clinify Plan",
+   "link_to": "Clinify Plan",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Clinify Settings",
+   "link_to": "Clinify Settings",
+   "type": "DocType"
+  }
+ ],
  "title": "Administration"
 }
