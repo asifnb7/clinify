@@ -27,11 +27,11 @@ class ClinifySubscription(Document):
                 _("Clinic is required before naming the subscription.")
             )
 
-        clinic_code = frappe.db.get_value(
-            "Clinic Configuration",
-            self.clinic,
-            "clinic_code",
+        clinic = frappe.get_single(
+            "Clinic Configuration"
         )
+
+        clinic_code = clinic.clinic_code
 
         if not clinic_code:
             frappe.throw(
@@ -71,17 +71,20 @@ class ClinifySubscription(Document):
         _sync_clinic_lifecycle(self)
 
     def validate_clinic(self):
-        if not self.clinic:
-            frappe.throw(
-                _("Clinic is required.")
-            )
+        """
+        Clinify currently operates with one clinic per site.
 
-        if not frappe.db.exists(
-            "Clinic Configuration",
-            self.clinic,
-        ):
+        Clinic Configuration is a Single DocType, so the
+        subscription stores its fixed identity rather than
+        using a database Link.
+        """
+
+        if not self.clinic:
+            self.clinic = "Clinic Configuration"
+
+        if self.clinic != "Clinic Configuration":
             frappe.throw(
-                _("Selected Clinic does not exist.")
+                _("Invalid clinic identity.")
             )
 
     def validate_plan(self):

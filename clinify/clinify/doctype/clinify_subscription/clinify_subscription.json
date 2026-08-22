@@ -30,10 +30,11 @@
   },
   {
    "fieldname": "clinic",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Clinic",
-   "options": "Clinic Configuration",
-   "reqd": 1
+   "reqd": 1,
+   "read_only": 1,
+   "default": "Clinic Configuration"
   },
   {
    "fieldname": "clinic_name",

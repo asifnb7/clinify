@@ -12,10 +12,7 @@ ALLOWED_SUBSCRIPTION_STATUSES = {
 
 
 def _sync_clinic_lifecycle(subscription):
-    clinic = frappe.get_doc(
-        "Clinic Configuration",
-        subscription.clinic,
-    )
+    clinic = get_current_clinic()
 
     if subscription.subscription_status == "Cancelled":
         clinic.subscription_status = "Expired"
