@@ -54,9 +54,17 @@ app_license = "mit"
 # No unsafe overrides here
 override_whitelisted_methods = {}
 
-app_include_css = "/assets/clinify/theme/css/clinify-theme.css"
+app_include_css = [
+    "/assets/clinify/theme/css/clinify-theme.css",
+    "/assets/clinify/css/clinify_subscription_list.css",
+]
 
 app_include_js = "/assets/clinify/js/clinify.js"
+
+
+doctype_list_js = {
+    "Clinify Subscription": "public/js/clinify_subscription_list.js",
+}
 
 doctype_js = {
     "Patient Encounter": "public/js/encounter/clinify_encounter.js",

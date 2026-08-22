@@ -6,6 +6,10 @@
  "field_order": [
   "subscription_identity_section",
   "clinic",
+  "clinic_name",
+  "clinic_code",
+  "department",
+  "city",
   "plan",
   "subscription_status",
   "dates_section",
@@ -32,19 +36,54 @@
    "reqd": 1
   },
   {
+   "fieldname": "clinic_name",
+   "fieldtype": "Data",
+   "label": "Clinic Name",
+   "fetch_from": "clinic.clinic_name",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "clinic_code",
+   "fieldtype": "Data",
+   "label": "Clinic ID",
+   "fetch_from": "clinic.clinic_code",
+   "read_only": 1,
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department",
+   "options": "Medical Department",
+   "fetch_from": "clinic.department",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City",
+   "fetch_from": "clinic.city",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
    "fieldname": "plan",
    "fieldtype": "Link",
    "label": "Clinify Plan",
    "options": "Clinify Plan",
-   "reqd": 1
+   "reqd": 1,
+   "in_list_view": 1
   },
   {
    "default": "Trial",
    "fieldname": "subscription_status",
    "fieldtype": "Select",
    "label": "Subscription Status",
-   "options": "\nTrial\nActive\nExpired\nSuspended\nCancelled",
-   "reqd": 1
+    "options": "\nTrial\nActive\nExpiring\nExpired\nSuspended\nCancelled",
+   "reqd": 1,
+   "in_list_view": 1
   },
   {
    "fieldname": "dates_section",
@@ -60,7 +99,8 @@
   {
    "fieldname": "end_date",
    "fieldtype": "Date",
-   "label": "End Date"
+   "label": "End Date",
+   "in_list_view": 1
   },
   {
    "fieldname": "billing_section",
@@ -115,5 +155,6 @@
  ],
  "sort_field": "modified",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "title_field": "clinic_name"
 }

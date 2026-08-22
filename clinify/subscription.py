@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import nowdate
 
 from clinify.clinic import get_current_clinic
 
@@ -6,7 +7,42 @@ from clinify.clinic import get_current_clinic
 ALLOWED_SUBSCRIPTION_STATUSES = {
     "Trial",
     "Active",
+    "Expiring",
 }
+
+
+def _sync_clinic_lifecycle(subscription):
+    clinic = frappe.get_doc(
+        "Clinic Configuration",
+        subscription.clinic,
+    )
+
+    if subscription.subscription_status == "Cancelled":
+        clinic.subscription_status = "Expired"
+        clinic.clinic_status = "Inactive"
+    else:
+        clinic.subscription_status = subscription.subscription_status
+
+    if subscription.subscription_status in {
+        "Trial",
+        "Active",
+        "Expiring",
+    }:
+        clinic.clinic_status = "Active"
+
+    if subscription.subscription_status in {
+        "Trial",
+        "Active",
+    }:
+        clinic.activation_date = clinic.activation_date or nowdate()
+
+    if subscription.subscription_status in {
+        "Expired",
+        "Suspended",
+    }:
+        clinic.clinic_status = "Suspended"
+
+    clinic.save(ignore_permissions=True)
 
 
 def get_current_subscription():
@@ -88,10 +124,7 @@ def is_subscription_active():
     Return True when the current subscription
     permits Clinify access.
 
-    Allowed statuses:
-
-    - Trial
-    - Active
+    Allowed statuses are Trial, Active, and Expiring.
     """
 
     subscription = get_current_subscription()

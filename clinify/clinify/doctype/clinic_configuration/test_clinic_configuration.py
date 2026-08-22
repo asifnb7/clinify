@@ -25,7 +25,7 @@ class TestClinicConfiguration(FrappeTestCase):
 		)
 		self.assertEqual(
 			self.meta.get_field("subscription_status").options.splitlines()[1:],
-			["Trial", "Active", "Expired", "Suspended"],
+			["Trial", "Active", "Expiring", "Expired", "Suspended"],
 		)
 
 	def test_activation_date_field_and_active_rule(self):

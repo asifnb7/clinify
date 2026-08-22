@@ -1,0 +1,52 @@
+/* ============================================================
+   CLINIFY SUBSCRIPTION - LIST VIEW
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   Allow list rows to expand vertically
+   ------------------------------------------------------------ */
+
+body[data-route*="clinify-subscription"] .list-row-container,
+body[data-route*="clinify-subscription"] .list-row {
+    height: auto !important;
+    min-height: 48px !important;
+}
+
+/* ------------------------------------------------------------
+   Allow text wrapping inside list columns
+   ------------------------------------------------------------ */
+
+body[data-route*="clinify-subscription"] .list-row-col {
+    height: auto !important;
+    min-height: 48px !important;
+    white-space: normal !important;
+}
+
+/* Target inner text containers used by Frappe */
+
+body[data-route*="clinify-subscription"] .list-row-col *,
+body[data-route*="clinify-subscription"] .list-row-col .ellipsis,
+body[data-route*="clinify-subscription"] .list-row-col span {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+/* ------------------------------------------------------------
+   Clinic Name
+   ------------------------------------------------------------ */
+
+body[data-route*="clinify-subscription"]
+[data-fieldname="clinic_name"] {
+    font-weight: 700 !important;
+}
+
+/* ------------------------------------------------------------
+   Keep rows visually aligned
+   ------------------------------------------------------------ */
+
+body[data-route*="clinify-subscription"] .list-row {
+    align-items: stretch !important;
+}

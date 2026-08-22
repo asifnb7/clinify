@@ -4,7 +4,7 @@
 frappe.ui.form.on("Clinic Configuration", {
 	validate(frm) {
 		const clinic_statuses = ["Active", "Inactive", "Suspended"];
-		const subscription_statuses = ["Trial", "Active", "Expired", "Suspended"];
+		const subscription_statuses = ["Trial", "Active", "Expiring", "Expired", "Suspended"];
 
 		if (!clinic_statuses.includes(frm.doc.clinic_status)) {
 			frappe.throw(__("Please select a valid Clinic Status."));
