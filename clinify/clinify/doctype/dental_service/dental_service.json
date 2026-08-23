@@ -13,7 +13,10 @@
   "is_active",
   "default_qty",
   "requires_tooth",
-  "description"
+  "description",
+  "pricing_basis",
+  "minimum_price",
+  "maximum_price"
  ],
  "fields": [
   {
@@ -65,6 +68,26 @@
    "fieldname": "requires_tooth",
    "fieldtype": "Check",
    "label": "Requires Tooth"
+  },
+  {
+   "fieldname": "pricing_basis",
+   "fieldtype": "Select",
+   "label": "Pricing Basis",
+   "options": "Fixed\nRange\nPer Tooth\nPer Cap\nPer Arch",
+   "default": "Fixed",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "minimum_price",
+   "fieldtype": "Currency",
+   "label": "Minimum Price",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "maximum_price",
+   "fieldtype": "Currency",
+   "label": "Maximum Price",
+   "in_list_view": 1
   }
  ],
  "grid_page_length": 50,

@@ -290,10 +290,12 @@ def _append_planned_procedure(doc, plan_name):
                 plan.append(
                     "dental_planned_procedures",
                     {
+                        "dental_service": dental_service.name,
                         "procedure_type": dental_service.service_name,
                         "tooth_number": service.tooth_area,
                         "tooth_surface": "O",
                         "planned_status": "Completed",
+                        "estimated_cost": dental_service.minimum_price or 0,
                         "linked_encounter": doc.name,
                     },
                 )

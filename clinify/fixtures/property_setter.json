@@ -2654,21 +2654,5 @@
   "property_type": "Check",
   "row_name": null,
   "value": "1"
- },
- {
-  "default_value": null,
-  "doc_type": "Patient Encounter",
-  "docstatus": 0,
-  "doctype": "Property Setter",
-  "doctype_or_field": "DocField",
-  "field_name": "custom_dental_services",
-  "is_system_generated": 0,
-  "modified": "2026-08-18 10:39:38.614981",
-  "module": null,
-  "name": "Patient Encounter-custom_dental_services-hidden",
-  "property": "hidden",
-  "property_type": "Check",
-  "row_name": null,
-  "value": "1"
  }
 ]

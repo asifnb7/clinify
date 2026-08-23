@@ -24,14 +24,12 @@ refresh(frm) {
     frm.__clinify_palette_loaded = true;
 
     // Draft Encounter → Doctor
-    // Dental Service Palette button disabled.
-    // Doctors now use the Dental Services child table directly.
-
-    // if (frm.doc.docstatus === 0) {
-    //     frm.add_custom_button(__("Select Dental Services"), function () {
-    //         open_dental_palette(frm);
-    //     });
-    // }
+    // Allow doctors to select one or more Dental Services.
+    if (frm.doc.docstatus === 0) {
+        frm.add_custom_button(__("Select Dental Services"), function () {
+            open_dental_palette(frm);
+        });
+    }
 
     // Submitted Encounter → Reception
     if (frm.doc.docstatus === 1) {
@@ -80,78 +78,170 @@ refresh(frm) {
 
 function open_dental_palette(frm) {
 
-    const services = [
-        { code: "DS001", label: "🦷 Scaling" },
-        { code: "DS002", label: "🦷 Filling" },
-        { code: "DS003", label: "🦷 RCT" },
-        { code: "DS004", label: "🦷 Extraction" },
-        { code: "DS005", label: "🦷 Crown" }
-    ];
+    frappe.call({
 
-    let html = `
-        <div style="padding:20px">
+        method: "clinify.clinify.api.dental_service.get_active_dental_services",
 
-            <h3 style="margin-bottom:20px">
-                Clinify Dental Services
-            </h3>
+        freeze: true,
+        freeze_message: __("Loading Dental Services..."),
 
-            <div id="clinify-service-list">
+        callback: function (r) {
 
-    `;
-
-    services.forEach(service => {
-
-        html += `
-
-            <button
-                class="btn btn-default clinify-service"
-                data-code="${service.code}"
-                style="
-                    margin:8px;
-                    min-width:150px;
-                ">
-
-                ${service.label}
-
-            </button>
-
-        `;
-
-    });
-
-    html += `
-            </div>
-        </div>
-    `;
-
-    let dialog = new frappe.ui.Dialog({
-
-        title: "Select Dental Service",
-
-        size: "large",
-
-        fields: [
-            {
-                fieldtype: "HTML",
-                fieldname: "body"
+            if (r.exc) {
+                return;
             }
-        ]
+
+            const services = r.message || [];
+
+            if (!services.length) {
+
+                frappe.msgprint({
+                    title: __("No Dental Services"),
+                    message: __(
+                        "No active Dental Services are configured."
+                    ),
+                    indicator: "orange"
+                });
+
+                return;
+            }
+
+            let html = `
+                <div style="padding:20px">
+
+                    <h3 style="margin-bottom:20px">
+                        Clinify Dental Services
+                    </h3>
+
+                    <div id="clinify-service-list">
+            `;
+
+            services.forEach(service => {
+
+                html += `
+
+                    <button
+                        class="btn btn-default clinify-service"
+                        data-service="${frappe.utils.escape_html(service.name)}"
+                        style="
+                            margin:8px;
+                            min-width:180px;
+                        ">
+
+                        🦷 ${frappe.utils.escape_html(
+                            service.service_name
+                        )}
+
+                    </button>
+
+                `;
+
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            let dialog = new frappe.ui.Dialog({
+
+                title: __("Select Dental Service"),
+
+                size: "large",
+
+                fields: [
+                    {
+                        fieldtype: "HTML",
+                        fieldname: "body"
+                    }
+                ]
+
+            });
+
+            dialog.fields_dict.body.$wrapper.html(html);
+
+            dialog.show();
+
+            dialog.$wrapper.on(
+                "click",
+                ".clinify-service",
+                function () {
+
+                    const service_name = $(this).attr(
+                        "data-service"
+                    );
+
+                    console.log(
+                        "Selected Dental Service:",
+                        service_name
+                    );
+
+                    add_service(
+                        frm,
+                        service_name,
+                        services
+                    );
+
+                    dialog.hide();
+
+                }
+            );
+
+        }
 
     });
 
-    dialog.fields_dict.body.$wrapper.html(html);
+}
 
-    dialog.show();
 
-    dialog.$wrapper.on("click", ".clinify-service", function () {
+function add_service(
+    frm,
+    service_name,
+    services
+) {
 
-        const service_code = $(this).data("code");
+    console.log(
+        "Adding Dental Service:",
+        service_name
+    );
 
-        console.log("Selected:", service_code);
+    const service = services.find(
+        item => item.name === service_name
+    );
 
-        add_service(frm, service_code);
+    if (!service) {
 
-        dialog.hide();
+        frappe.msgprint({
+            title: __("Dental Service Error"),
+            message: __(
+                "The selected Dental Service could not be found."
+            ),
+            indicator: "red"
+        });
+
+        return;
+    }
+
+    const row = frm.add_child(
+        "custom_dental_services"
+    );
+
+    row.dental_service = service.name;
+
+    row.qty = service.default_qty || 1;
+
+    frm.refresh_field(
+        "custom_dental_services"
+    );
+
+    frappe.show_alert({
+
+        message: __(
+            "{0} added",
+            [service.service_name]
+        ),
+
+        indicator: "green"
 
     });
 
