@@ -246,27 +246,3 @@ function add_service(
     });
 
 }
-
-
-
-function add_service(frm, service_code) {
-
-    console.log("Adding Service:", service_code);
-
-    const row = frm.add_child("custom_dental_services");
-
-    row.dental_service = service_code;
-
-    row.qty = 1;
-
-    frm.refresh_field("custom_dental_services");
-
-    frappe.show_alert({
-
-        message: __("Service Added"),
-
-        indicator: "green"
-
-    });
-
-}

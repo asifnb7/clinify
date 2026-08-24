@@ -2654,5 +2654,37 @@
   "property_type": "Check",
   "row_name": null,
   "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Dental Planned Procedure",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "procedure_type",
+  "is_system_generated": 1,
+  "modified": "2026-08-24 11:09:22.530620",
+  "module": null,
+  "name": "Dental Planned Procedure-procedure_type-hidden",
+  "property": "hidden",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Dental Planned Procedure",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "procedure_type",
+  "is_system_generated": 1,
+  "modified": "2026-08-24 11:09:22.896639",
+  "module": null,
+  "name": "Dental Planned Procedure-procedure_type-reqd",
+  "property": "reqd",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "0"
  }
 ]

@@ -242,7 +242,18 @@ def _get_or_create_treatment_plan(doc):
 
 
 def _append_planned_procedure(doc, plan_name):
-    """Append completed procedures to the Dental Treatment Plan."""
+    """
+    Synchronize Encounter Dental Services into the Dental Treatment Plan.
+
+    SINGLE SOURCE OF TRUTH:
+        Encounter Dental Service
+            -> Dental Planned Procedure.dental_service
+            -> Dental Service.erpnext_item
+            -> Sales Invoice
+
+    Legacy procedure_type is preserved only for historical compatibility.
+    New procedures never derive billing identity from procedure_type.
+    """
 
     if not plan_name:
         return
@@ -255,8 +266,7 @@ def _append_planned_procedure(doc, plan_name):
     except Exception:
         return
 
-    # Prevent duplicate rows for the same Encounter
-
+    # Prevent duplicate rows for the same Encounter.
     if any(
         getattr(row, "linked_encounter", None) == doc.name
         for row in getattr(
@@ -267,70 +277,51 @@ def _append_planned_procedure(doc, plan_name):
     ):
         return
 
-    # -------------------------------------------------------
-    # DS2 : Multi Dental Service workflow
-    # -------------------------------------------------------
+    services = getattr(
+        doc,
+        "custom_dental_services",
+        None,
+    ) or []
 
-    if getattr(doc, "custom_dental_services", None):
+    # No Dental Services means this is a consultation-only encounter.
+    # Do NOT create a legacy/unlinked Dental Planned Procedure.
+    if not services:
+        return
 
-        for service in doc.custom_dental_services:
+    added = False
 
-            if not service.dental_service:
-                continue
+    for service in services:
 
-            dental_service = frappe.get_doc(
-                "Dental Service",
-                service.dental_service,
-            )
+        if not service.dental_service:
+            continue
 
-            qty = service.qty or 1
-
-            for _ in range(int(qty)):
-
-                plan.append(
-                    "dental_planned_procedures",
-                    {
-                        "dental_service": dental_service.name,
-                        "procedure_type": dental_service.service_name,
-                        "tooth_number": service.tooth_area,
-                        "tooth_surface": "O",
-                        "planned_status": "Completed",
-                        "estimated_cost": dental_service.minimum_price or 0,
-                        "linked_encounter": doc.name,
-                    },
-                )
-
-    # -------------------------------------------------------
-    # Legacy Single Procedure Workflow
-    # -------------------------------------------------------
-
-    else:
-
-        if not getattr(
-            doc,
-            "custom_procedure_type",
-            None,
-        ):
-            frappe.throw(
-                "Please select at least one Dental Service."
-            )
-
-        plan.append(
-            "dental_planned_procedures",
-            {
-                "procedure_type": doc.custom_procedure_type,
-                "tooth_number": doc.custom_tooth_area,
-                "tooth_surface": "O",
-                "planned_status": "Completed",
-                "linked_encounter": doc.name,
-            },
+        dental_service = frappe.get_doc(
+            "Dental Service",
+            service.dental_service,
         )
 
-    # Save only once
+        qty = int(service.qty or 1)
 
-    plan.save(
-        ignore_permissions=True,
-    )
+        for _ in range(qty):
+
+            plan.append(
+                "dental_planned_procedures",
+                {
+                    "dental_service": dental_service.name,
+                    "tooth_number": service.tooth_area,
+                    "tooth_surface": "O",
+                    "planned_status": "Completed",
+                    "estimated_cost": dental_service.minimum_price or 0,
+                    "linked_encounter": doc.name,
+                },
+            )
+
+            added = True
+
+    if added:
+        plan.save(
+            ignore_permissions=True,
+        )
 
 
 # =========================================================
@@ -499,6 +490,7 @@ def create_invoice_from_encounter(encounter_name):
 
     invoice = create_invoice_from_dental_plan(
         appointment.reference_docname,
+        appointment_name=appointment.name,
     )
 
     # Store invoice reference on Appointment

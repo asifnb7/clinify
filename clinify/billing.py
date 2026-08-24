@@ -262,7 +262,10 @@ def _append_consultation_item(
 
 
 @frappe.whitelist()
-def create_invoice_from_dental_plan(plan_name):
+def create_invoice_from_dental_plan(
+    plan_name,
+    appointment_name=None,
+):
     """
     Central Clinify billing engine.
 
@@ -287,6 +290,48 @@ def create_invoice_from_dental_plan(plan_name):
         plan_name,
     )
 
+    # ---------------------------------------------------------
+    # IDEMPOTENCY
+    # ---------------------------------------------------------
+    # A Dental Treatment Plan belongs to an Appointment.
+    # If that Appointment already has an invoice, always reuse it.
+    #
+    # This prevents duplicate invoices when:
+    # - an Encounter is saved more than once
+    # - Reception calls billing again
+    # - the billing API is invoked repeatedly
+    # ---------------------------------------------------------
+
+    # Idempotency is appointment-specific.
+    #
+    # A Dental Treatment Plan may span multiple consultations.
+    # Therefore the Treatment Plan itself must NOT be used as
+    # the invoice idempotency key.
+    #
+    # The current Appointment is the billing transaction boundary:
+    #
+    # Appointment
+    #     -> existing ref_sales_invoice
+    #
+    # If this exact appointment already has an invoice, reuse it.
+    if appointment_name:
+        appointment = frappe.get_doc(
+            "Patient Appointment",
+            appointment_name,
+        )
+
+        existing_invoice = getattr(
+            appointment,
+            "ref_sales_invoice",
+            None,
+        )
+
+        if existing_invoice and frappe.db.exists(
+            "Sales Invoice",
+            existing_invoice,
+        ):
+            return existing_invoice
+
     rows = frappe.get_all(
         "Dental Planned Procedure",
         filters={
@@ -297,14 +342,17 @@ def create_invoice_from_dental_plan(plan_name):
         fields=[
             "name",
             "dental_service",
-            "procedure_type",
         ],
     )
 
-    if not rows:
-        frappe.throw(
-            "No completed, unbilled procedures found."
-        )
+    # A consultation-only encounter is valid.
+    #
+    # Dental Planned Procedures are optional.
+    # The consultation line is still authoritative for the
+    # consultation charge / free-follow-up decision.
+    #
+    # Therefore an empty `rows` result must NOT abort invoice
+    # creation.
 
     invoice = frappe.new_doc("Sales Invoice")
 
@@ -337,9 +385,8 @@ def create_invoice_from_dental_plan(plan_name):
         if not row.dental_service:
             frappe.throw(
                 f"Dental Planned Procedure '{row.name}' "
-                f"has no Dental Service linked. "
-                f"Legacy procedure type '{row.procedure_type}' "
-                f"cannot be billed automatically."
+                "has no Dental Service linked. "
+                "Legacy procedures cannot be billed automatically."
             )
 
         service = frappe.get_value(

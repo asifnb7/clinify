@@ -202,7 +202,10 @@ def create_invoice_from_ready_appointment(appointment):
             "This appointment is not mapped to a Dental Treatment Plan."
         )
 
-    invoice_name = create_invoice_from_dental_plan(appt.reference_docname)
+    invoice_name = create_invoice_from_dental_plan(
+        appt.reference_docname,
+        appointment_name=appt.name,
+    )
 
     appt.ref_sales_invoice = invoice_name
     appt.save(ignore_permissions=True)
