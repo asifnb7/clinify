@@ -1,7 +1,7 @@
 import frappe
 from frappe.utils import nowdate
 
-from clinify.billing import create_invoice_from_dental_plan
+from clinify.encounter import create_invoice_from_encounter
 
 
 @frappe.whitelist()
@@ -137,8 +137,20 @@ def check_in_patient(appointment):
 @frappe.whitelist()
 def get_ready_for_billing():
     """
-    Return today's appointments that have at least one
-    completed but unbilled Dental Planned Procedure.
+    Return today's appointments that are ready for billing.
+
+    The active billing source is the Patient Encounter.
+
+    An appointment is ready when:
+        - it has a Patient Encounter
+        - the Encounter is linked to the appointment
+        - the appointment does not already have an invoice
+
+    Dental services are taken from:
+        Patient Encounter.custom_dental_services
+
+    Consultation billing is handled centrally by the
+    Encounter billing engine.
     """
 
     from clinify.scripts.dev import doctor_name
@@ -148,7 +160,6 @@ def get_ready_for_billing():
         filters={
             "custom_reception_status": "Billing",
             "docstatus": ["!=", 2],
-            "reference_doctype": "Dental Treatment Plan",
         },
         fields=[
             "name",
@@ -156,8 +167,8 @@ def get_ready_for_billing():
             "patient_name",
             "appointment_time",
             "practitioner",
-            "reference_docname",
             "custom_reception_status",
+            "ref_sales_invoice",
         ],
         order_by="appointment_time asc",
     )
@@ -166,20 +177,25 @@ def get_ready_for_billing():
 
     for appt in appointments:
 
-        if not appt.reference_docname:
+        # Already invoiced appointments are not billing candidates.
+        if appt.ref_sales_invoice:
             continue
 
-        unbilled = frappe.db.exists(
-            "Dental Planned Procedure",
+        encounter_name = frappe.db.get_value(
+            "Patient Encounter",
             {
-                "parent": appt.reference_docname,
-                "planned_status": "Completed",
-                "billed_invoice": ["is", "not set"],
+                "appointment": appt.name,
+                "patient": appt.patient,
+                "docstatus": ["!=", 2],
             },
+            "name",
+            order_by="creation desc",
         )
 
-        if not unbilled:
+        if not encounter_name:
             continue
+
+        appt["encounter"] = encounter_name
 
         appt["doctor_name"] = doctor_name(
             appt.get("practitioner")
@@ -189,33 +205,79 @@ def get_ready_for_billing():
 
     return ready
 
+
 @frappe.whitelist()
 def create_invoice_from_ready_appointment(appointment):
     """
-    Create Sales Invoice for a ready appointment using the mapped Dental Treatment Plan.
+    Create the Sales Invoice for a Reception billing appointment.
+
+    The Patient Encounter is the single source of truth.
     """
 
-    appt = frappe.get_doc("Patient Appointment", appointment)
-
-    if appt.reference_doctype != "Dental Treatment Plan" or not appt.reference_docname:
-        frappe.throw(
-            "This appointment is not mapped to a Dental Treatment Plan."
-        )
-
-    invoice_name = create_invoice_from_dental_plan(
-        appt.reference_docname,
-        appointment_name=appt.name,
+    appt = frappe.get_doc(
+        "Patient Appointment",
+        appointment,
     )
 
-    appt.ref_sales_invoice = invoice_name
-    appt.save(ignore_permissions=True)
+    if appt.ref_sales_invoice:
+        if frappe.db.exists(
+            "Sales Invoice",
+            appt.ref_sales_invoice,
+        ):
+            return {
+                "success": True,
+                "invoice": appt.ref_sales_invoice,
+            }
+
+    encounter_name = frappe.db.get_value(
+        "Patient Encounter",
+        {
+            "appointment": appt.name,
+            "patient": appt.patient,
+            "docstatus": ["!=", 2],
+        },
+        "name",
+        order_by="creation desc",
+    )
+
+    if not encounter_name:
+        frappe.throw(
+            "No Patient Encounter is linked to this appointment."
+        )
+
+    invoice_name = create_invoice_from_encounter(
+        encounter_name,
+    )
+
+    if not invoice_name:
+        frappe.throw(
+            "No billable services were found for this Encounter."
+        )
+
+    frappe.db.set_value(
+        "Patient Appointment",
+        appt.name,
+        "ref_sales_invoice",
+        invoice_name,
+        update_modified=False,
+    )
+
+    frappe.db.set_value(
+        "Patient Appointment",
+        appt.name,
+        "custom_reception_status",
+        "View Invoice",
+        update_modified=False,
+    )
 
     frappe.db.commit()
 
     return {
         "success": True,
         "invoice": invoice_name,
+        "encounter": encounter_name,
     }
+
 
 @frappe.whitelist()
 def search_patients(search_text):

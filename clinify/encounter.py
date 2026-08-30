@@ -1,6 +1,6 @@
 import frappe
 
-from clinify.billing import create_invoice_from_dental_plan
+from clinify.billing import _append_consultation_item
 
 
 # =========================================================
@@ -199,131 +199,6 @@ def get_matching_vitals_for_context(
 # DENTAL TREATMENT PLAN
 # =========================================================
 
-def _get_or_create_treatment_plan(doc):
-    """Create or reuse a Dental Treatment Plan for the linked appointment."""
-
-    appointment_name = getattr(doc, "appointment", None)
-
-    if not appointment_name:
-        return None
-
-    try:
-        appointment = frappe.get_doc(
-            "Patient Appointment",
-            appointment_name,
-        )
-    except Exception:
-        return None
-
-    if (
-        getattr(appointment, "reference_doctype", None)
-        and getattr(appointment, "reference_docname", None)
-    ):
-        return appointment.reference_docname
-
-    plan = frappe.new_doc("Dental Treatment Plan")
-
-    plan.status = "Active"
-    plan.patient = doc.patient
-    plan.primary_doctor = doc.practitioner
-
-    plan.insert(
-        ignore_permissions=True,
-    )
-
-    appointment.reference_doctype = "Dental Treatment Plan"
-    appointment.reference_docname = plan.name
-
-    appointment.save(
-        ignore_permissions=True,
-    )
-
-    return plan.name
-
-
-def _append_planned_procedure(doc, plan_name):
-    """
-    Synchronize Encounter Dental Services into the Dental Treatment Plan.
-
-    SINGLE SOURCE OF TRUTH:
-        Encounter Dental Service
-            -> Dental Planned Procedure.dental_service
-            -> Dental Service.erpnext_item
-            -> Sales Invoice
-
-    Legacy procedure_type is preserved only for historical compatibility.
-    New procedures never derive billing identity from procedure_type.
-    """
-
-    if not plan_name:
-        return
-
-    try:
-        plan = frappe.get_doc(
-            "Dental Treatment Plan",
-            plan_name,
-        )
-    except Exception:
-        return
-
-    # Prevent duplicate rows for the same Encounter.
-    if any(
-        getattr(row, "linked_encounter", None) == doc.name
-        for row in getattr(
-            plan,
-            "dental_planned_procedures",
-            [],
-        )
-    ):
-        return
-
-    services = getattr(
-        doc,
-        "custom_dental_services",
-        None,
-    ) or []
-
-    # No Dental Services means this is a consultation-only encounter.
-    # Do NOT create a legacy/unlinked Dental Planned Procedure.
-    if not services:
-        return
-
-    added = False
-
-    for service in services:
-
-        if not service.dental_service:
-            continue
-
-        dental_service = frappe.get_doc(
-            "Dental Service",
-            service.dental_service,
-        )
-
-        qty = int(service.qty or 1)
-
-        for _ in range(qty):
-
-            plan.append(
-                "dental_planned_procedures",
-                {
-                    "dental_service": dental_service.name,
-                    "tooth_number": service.tooth_area,
-                    "tooth_surface": "O",
-                    "planned_status": "Completed",
-                    "estimated_cost": dental_service.minimum_price or 0,
-                    "linked_encounter": doc.name,
-                },
-            )
-
-            added = True
-
-    if added:
-        plan.save(
-            ignore_permissions=True,
-        )
-
-
 # =========================================================
 # ENCOUNTER SAVE
 # =========================================================
@@ -333,11 +208,20 @@ def after_save(doc, method=None):
     Doctor saves the Encounter.
 
     Workflow:
-        1. Create / Reuse Dental Treatment Plan
-        2. Synchronize Planned Procedures
-        3. Create Draft Invoice
-        4. Link Invoice to Appointment
-        5. Move Appointment to View Invoice
+
+        1. Require a linked Appointment.
+        2. Create one Sales Invoice when billable services exist.
+        3. Consultation billing remains centralized.
+        4. Dental billing uses:
+               Patient Encounter.custom_dental_services
+                   -> Clinify Encounter Service
+                   -> Dental Service
+                   -> ERPNext Item
+        5. Link Invoice to Appointment.
+        6. Move Appointment to View Invoice.
+
+    Legacy Dental Treatment Plan architecture is intentionally
+    no longer part of the active Encounter workflow.
     """
 
     if not getattr(
@@ -346,28 +230,6 @@ def after_save(doc, method=None):
         None,
     ):
         return
-
-    # -------------------------------------------------
-    # Create / Reuse Treatment Plan
-    # -------------------------------------------------
-
-    plan_name = _get_or_create_treatment_plan(doc)
-
-    if not plan_name:
-        return
-
-    # -------------------------------------------------
-    # Synchronize Planned Procedures
-    # -------------------------------------------------
-
-    _append_planned_procedure(
-        doc,
-        plan_name,
-    )
-
-    # -------------------------------------------------
-    # Create Draft Invoice
-    # -------------------------------------------------
 
     try:
 
@@ -392,10 +254,6 @@ def after_save(doc, method=None):
     if not invoice_name:
         return
 
-    # -------------------------------------------------
-    # Move Appointment to View Invoice
-    # -------------------------------------------------
-
     frappe.db.set_value(
         "Patient Appointment",
         doc.appointment,
@@ -410,6 +268,8 @@ def after_save(doc, method=None):
 # =========================================================
 # BEFORE INSERT
 # =========================================================
+
+
 
 def before_insert(doc, method=None):
     """
@@ -457,8 +317,21 @@ def before_insert(doc, method=None):
 @frappe.whitelist()
 def create_invoice_from_encounter(encounter_name):
     """
-    Create a Sales Invoice for the submitted Encounter.
-    Reuses the existing Dental Billing engine.
+    Create the Encounter Sales Invoice.
+
+    The transaction source is the Patient Encounter.
+
+    Dental services are taken directly from:
+
+        Patient Encounter.custom_dental_services
+            -> Clinify Encounter Service
+            -> Dental Service
+            -> ERPNext Item
+
+    Consultation billing remains centralized in
+    clinify.billing._append_consultation_item().
+
+    Legacy Dental Treatment Plan objects are not required.
     """
 
     encounter = frappe.get_doc(
@@ -477,30 +350,51 @@ def create_invoice_from_encounter(encounter_name):
         encounter.appointment,
     )
 
-    if (
-        appointment.reference_doctype
-        != "Dental Treatment Plan"
-        or not appointment.reference_docname
-    ):
+    # ---------------------------------------------------------
+    # IDEMPOTENCY
+    # ---------------------------------------------------------
 
-        frappe.throw(
-            "No Dental Treatment Plan is linked "
-            "to this Appointment."
-        )
-
-    invoice = create_invoice_from_dental_plan(
-        appointment.reference_docname,
-        appointment_name=appointment.name,
+    existing_invoice = getattr(
+        appointment,
+        "ref_sales_invoice",
+        None,
     )
 
-    # Store invoice reference on Appointment
+    if (
+        existing_invoice
+        and frappe.db.exists(
+            "Sales Invoice",
+            existing_invoice,
+        )
+    ):
+        return existing_invoice
+
+    # ---------------------------------------------------------
+    # NEW DENTAL BILLING ENGINE
+    # ---------------------------------------------------------
+
+    from clinify.dental_billing import (
+        create_invoice_from_encounter_dental,
+    )
+
+    invoice_name = create_invoice_from_encounter_dental(
+        encounter,
+    )
+
+    if not invoice_name:
+        return None
+
+    # ---------------------------------------------------------
+    # STORE INVOICE REFERENCE
+    # ---------------------------------------------------------
 
     frappe.db.set_value(
         "Patient Appointment",
         appointment.name,
         "ref_sales_invoice",
-        invoice,
+        invoice_name,
         update_modified=False,
     )
 
-    return invoice
+    return invoice_name
+

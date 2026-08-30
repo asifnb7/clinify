@@ -59,7 +59,7 @@ app_include_css = [
     "/assets/clinify/css/clinify_subscription_list.css",
 ]
 
-app_include_js = "/assets/clinify/js/clinify.js"
+app_include_js = "/assets/clinify/js/reception_route.js"
 
 
 doctype_list_js = {

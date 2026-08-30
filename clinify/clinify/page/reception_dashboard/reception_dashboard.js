@@ -2,10 +2,150 @@ frappe.pages["reception-dashboard"].on_page_load = function (wrapper) {
 
     let page = frappe.ui.make_app_page({
         parent: wrapper,
-        single_column: true
+        single_column: false
     });
 
     page.set_title(__("Reception Dashboard"));
+
+    // Clinify navigation for the Reception Dashboard.
+    const reception_sidebar_items = [
+        { label: "Home", route: "home", icon: "home" },
+        { label: "Reception", route: "reception-dashboard", icon: "users" },
+        { label: "Doctor", route: "doctor", icon: "user" },
+        { label: "Accounting", route: "accounting", icon: "accounting" },
+        { label: "Billing", route: "billing", icon: "money" },
+        { label: "Laboratory", route: "laboratory", icon: "lab" },
+        { label: "Pharmacy", route: "pharmacy", icon: "medicine" },
+        { label: "Reports", route: "reports", icon: "file" },
+        { label: "Administration", route: "administration", icon: "setting" },
+        { label: "Settings", route: "settings", icon: "setting" },
+        { label: "Users", route: "users", icon: "users" },
+        { label: "Healthcare", route: "healthcare", icon: "hospital" }
+    ];
+
+    // Match the native Clinify/Frappe workspace sidebar appearance.
+    if (!document.getElementById("clinify-reception-sidebar-style")) {
+        const style = document.createElement("style");
+        style.id = "clinify-reception-sidebar-style";
+        style.textContent = `
+            .layout-side-section:has(.clinify-reception-sidebar) {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #1265d8;
+                min-height: calc(100vh - var(--navbar-height));
+            }
+
+            .clinify-reception-sidebar {
+                width: 100%;
+                min-height: calc(100vh - var(--navbar-height));
+                padding: 0.35rem 0 1rem;
+                background: #1265d8;
+                box-sizing: border-box;
+            }
+
+            .clinify-reception-sidebar-item {
+                display: flex;
+                align-items: center;
+                width: calc(100% - 10px);
+                min-height: 42px;
+                margin: 2px 5px;
+                padding: 0.55rem 0.9rem;
+                border: 0;
+                border-radius: 8px;
+                background: transparent;
+                color: #fff;
+                font-family: inherit;
+                font-size: 0.9rem;
+                font-weight: 600;
+                line-height: 1.2;
+                text-align: left;
+                cursor: pointer;
+                appearance: none;
+                -webkit-appearance: none;
+                transition:
+                    background-color 0.15s ease,
+                    color 0.15s ease;
+            }
+
+            .clinify-reception-sidebar-item:hover {
+                background: rgba(255, 255, 255, 0.12);
+                color: #fff;
+            }
+
+            .clinify-reception-sidebar-item.active {
+                background: rgba(255, 255, 255, 0.24);
+                color: #fff;
+            }
+
+            .clinify-reception-sidebar-icon {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 24px;
+                min-width: 24px;
+                margin-right: 0.55rem;
+                color: #fff;
+            }
+
+            .clinify-reception-sidebar-icon svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .clinify-reception-sidebar-label {
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .layout-side-section:has(.clinify-reception-sidebar) + .layout-main-section-wrapper {
+                padding-left: 0.75rem;
+            }
+
+            @media (max-width: 767.98px) {
+                .clinify-reception-sidebar {
+                    min-height: auto;
+                }
+
+                .clinify-reception-sidebar-item {
+                    min-height: 40px;
+                }
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    page.sidebar.html(`
+        <div class="clinify-reception-sidebar">
+            ${reception_sidebar_items.map((item) => `
+                <button
+                    type="button"
+                    class="clinify-reception-sidebar-item ${item.label === "Reception" ? "active" : ""}"
+                    data-route="${item.route}"
+                    title="${__(item.label)}"
+                >
+                    <span class="clinify-reception-sidebar-icon">
+                        ${frappe.utils.icon(item.icon, "sm")}
+                    </span>
+                    <span class="clinify-reception-sidebar-label">
+                        ${__(item.label)}
+                    </span>
+                </button>
+            `).join("")}
+        </div>
+    `);
+
+    page.sidebar.find(".clinify-reception-sidebar-item").on("click", function () {
+        const route = $(this).data("route");
+
+        if (route === "reception-dashboard") {
+            frappe.set_route("reception-dashboard");
+        } else {
+            frappe.set_route(route);
+        }
+    });
 
     const quickActions = [
         {

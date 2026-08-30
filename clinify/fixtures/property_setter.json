@@ -2686,5 +2686,21 @@
   "property_type": "Check",
   "row_name": null,
   "value": "0"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Patient Encounter",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocType",
+  "field_name": null,
+  "is_system_generated": 0,
+  "modified": "2026-08-24 16:34:49.366229",
+  "module": null,
+  "name": "Patient Encounter-main-is_submittable",
+  "property": "is_submittable",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "0"
  }
 ]
