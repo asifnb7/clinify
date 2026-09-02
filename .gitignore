@@ -17,3 +17,14 @@ node_modules/
 
 # Clinify backups
 hooks_backup.py
+# Local Clinify backup archives
+.clinify_backups/
+*.backup-*
+*.before-*
+# Local/generated test artifacts
+item.name
+*.pre-saas-backup
+*.backup.*
+*.before_subscription_list_fix
+clinify/dev/*backup_*.json
+clinify/importers/*.backup_day2.py

@@ -1,0 +1,175 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-28 20:10:06.951719",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "tenant_name",
+  "tenant_code",
+  "site_name",
+  "domain",
+  "administrator_section",
+  "administrator_name",
+  "administrator_email",
+  "provisioning_section",
+  "provisioning_status",
+  "provisioning_error",
+  "provisioned_on",
+  "subscription_section",
+  "plan",
+  "subscription",
+  "subscription_status",
+  "lifecycle_section",
+  "enabled",
+  "clinic_status",
+  "last_verified_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "tenant_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tenant Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "tenant_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tenant Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "site_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Site Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "domain",
+   "fieldtype": "Data",
+   "label": "Domain"
+  },
+  {
+   "fieldname": "administrator_section",
+   "fieldtype": "Section Break",
+   "label": "Administrator"
+  },
+  {
+   "fieldname": "administrator_name",
+   "fieldtype": "Data",
+   "label": "Administrator Name"
+  },
+  {
+   "fieldname": "administrator_email",
+   "fieldtype": "Data",
+   "label": "Administrator Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "provisioning_section",
+   "fieldtype": "Section Break",
+   "label": "Provisioning"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "provisioning_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Provisioning Status",
+   "options": "\nPending\nCreating Site\nInstalling Apps\nConfiguring Clinic\nCreating Subscription\nCreating Administrator\nVerifying\nReady\nFailed\nSuspended"
+  },
+  {
+   "fieldname": "provisioning_error",
+   "fieldtype": "Small Text",
+   "label": "Provisioning Error"
+  },
+  {
+   "fieldname": "provisioned_on",
+   "fieldtype": "Datetime",
+   "label": "Provisioned On"
+  },
+  {
+   "fieldname": "subscription_section",
+   "fieldtype": "Section Break",
+   "label": "Subscription"
+  },
+  {
+   "fieldname": "plan",
+   "fieldtype": "Link",
+   "label": "Plan",
+   "options": "Clinify Plan"
+  },
+  {
+   "fieldname": "subscription",
+   "fieldtype": "Link",
+   "label": "Subscription",
+   "options": "Clinify Subscription"
+  },
+  {
+   "fieldname": "subscription_status",
+   "fieldtype": "Data",
+   "label": "Subscription Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lifecycle_section",
+   "fieldtype": "Section Break",
+   "label": "Lifecycle"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "default": "Active",
+   "fieldname": "clinic_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Clinic Status",
+   "options": "\nActive\nInactive\nSuspended"
+  },
+  {
+   "fieldname": "last_verified_on",
+   "fieldtype": "Datetime",
+   "label": "Last Verified On"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-28 20:10:06.951719",
+ "modified_by": "Administrator",
+ "module": "Clinify",
+ "name": "Clinify Tenant",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
