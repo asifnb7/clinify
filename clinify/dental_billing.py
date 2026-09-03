@@ -176,136 +176,156 @@ def create_invoice_from_encounter_dental(encounter):
     # ---------------------------------------------------------
 
     appointment = None
+    try:
+        if getattr(
+            encounter,
+            "appointment",
+            None,
+        ):
 
-    if getattr(
-        encounter,
-        "appointment",
-        None,
-    ):
+            locked_appointment = frappe.db.sql(
+                """
+                SELECT name
+                FROM `tabPatient Appointment`
+                WHERE name = %s
+                FOR UPDATE
+                """,
+                (encounter.appointment,),
+                as_dict=True,
+            )
 
-        appointment = frappe.get_doc(
-            "Patient Appointment",
-            encounter.appointment,
+            if not locked_appointment:
+                frappe.throw(
+                    _(
+                        "Patient Appointment '{0}' does not exist."
+                    ).format(encounter.appointment)
+                )
+
+            appointment = frappe.get_doc(
+                "Patient Appointment",
+                encounter.appointment,
+            )
+
+            existing_invoice = getattr(
+                appointment,
+                "ref_sales_invoice",
+                None,
+            )
+
+            if (
+                existing_invoice
+                and frappe.db.exists(
+                    "Sales Invoice",
+                    existing_invoice,
+                )
+            ):
+                return existing_invoice
+
+        # ---------------------------------------------------------
+        # PATIENT CUSTOMER
+        # ---------------------------------------------------------
+
+        customer = frappe.db.get_value(
+            "Patient",
+            encounter.patient,
+            "customer",
         )
 
-        existing_invoice = getattr(
-            appointment,
-            "ref_sales_invoice",
+        if not customer:
+            frappe.throw(
+                _(
+                    "Patient '{0}' does not have an ERPNext Customer."
+                ).format(
+                    encounter.patient
+                )
+            )
+
+        # ---------------------------------------------------------
+        # CREATE ONE INVOICE
+        # ---------------------------------------------------------
+
+        invoice = frappe.new_doc(
+            "Sales Invoice"
+        )
+
+        invoice.customer = customer
+
+        if (
+            hasattr(encounter, "company")
+            and encounter.company
+        ):
+            invoice.company = encounter.company
+
+        invoice.set_posting_time = 1
+
+        # ---------------------------------------------------------
+        # PRIMARY DOCTOR
+        # ---------------------------------------------------------
+
+        practitioner = getattr(
+            encounter,
+            "practitioner",
             None,
         )
 
-        if (
-            existing_invoice
-            and frappe.db.exists(
-                "Sales Invoice",
-                existing_invoice,
-            )
-        ):
-            return existing_invoice
+        if practitioner:
+            invoice.custom_primary_doctor = practitioner
 
-    # ---------------------------------------------------------
-    # PATIENT CUSTOMER
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
+        # CONSULTATION
+        # ---------------------------------------------------------
 
-    customer = frappe.db.get_value(
-        "Patient",
-        encounter.patient,
-        "customer",
-    )
-
-    if not customer:
-        frappe.throw(
-            _(
-                "Patient '{0}' does not have an ERPNext Customer."
-            ).format(
-                encounter.patient
-            )
+        from clinify.billing import (
+            _append_consultation_item,
         )
 
-    # ---------------------------------------------------------
-    # CREATE ONE INVOICE
-    # ---------------------------------------------------------
-
-    invoice = frappe.new_doc(
-        "Sales Invoice"
-    )
-
-    invoice.customer = customer
-
-    if (
-        hasattr(encounter, "company")
-        and encounter.company
-    ):
-        invoice.company = encounter.company
-
-    invoice.set_posting_time = 1
-
-    # ---------------------------------------------------------
-    # PRIMARY DOCTOR
-    # ---------------------------------------------------------
-
-    practitioner = getattr(
-        encounter,
-        "practitioner",
-        None,
-    )
-
-    if practitioner:
-        invoice.custom_primary_doctor = practitioner
-
-    # ---------------------------------------------------------
-    # CONSULTATION
-    # ---------------------------------------------------------
-
-    from clinify.billing import (
-        _append_consultation_item,
-    )
-
-    _append_consultation_item(
-        invoice=invoice,
-        patient=customer,
-        practitioner=practitioner,
-        consultation_date=today(),
-    )
-
-    # ---------------------------------------------------------
-    # DENTAL SERVICES
-    # ---------------------------------------------------------
-
-    append_dental_items(
-        invoice,
-        encounter,
-    )
-
-    # ---------------------------------------------------------
-    # NOTHING TO BILL
-    # ---------------------------------------------------------
-
-    if not invoice.items:
-        return None
-
-    # ---------------------------------------------------------
-    # INSERT ONE INVOICE
-    # ---------------------------------------------------------
-
-    invoice.insert(
-        ignore_permissions=True
-    )
-
-    # ---------------------------------------------------------
-    # LINK INVOICE TO APPOINTMENT
-    # ---------------------------------------------------------
-
-    if appointment:
-
-        frappe.db.set_value(
-            "Patient Appointment",
-            appointment.name,
-            "ref_sales_invoice",
-            invoice.name,
-            update_modified=False,
+        _append_consultation_item(
+            invoice=invoice,
+            patient=customer,
+            practitioner=practitioner,
+            consultation_date=today(),
         )
 
-    frappe.db.commit()
+        # ---------------------------------------------------------
+        # DENTAL SERVICES
+        # ---------------------------------------------------------
 
-    return invoice.name
+        append_dental_items(
+            invoice,
+            encounter,
+        )
+
+        # ---------------------------------------------------------
+        # NOTHING TO BILL
+        # ---------------------------------------------------------
+
+        if not invoice.items:
+            return None
+
+        # ---------------------------------------------------------
+        # INSERT ONE INVOICE
+        # ---------------------------------------------------------
+
+        invoice.insert(
+            ignore_permissions=True
+        )
+
+        # ---------------------------------------------------------
+        # LINK INVOICE TO APPOINTMENT
+        # ---------------------------------------------------------
+
+        if appointment:
+
+            frappe.db.set_value(
+                "Patient Appointment",
+                appointment.name,
+                "ref_sales_invoice",
+                invoice.name,
+                update_modified=False,
+            )
+
+        frappe.db.commit()
+
+        return invoice.name
+    except Exception:
+        raise

@@ -6,10 +6,21 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "tenant_id",
   "tenant_name",
   "tenant_code",
   "site_name",
   "domain",
+  "registered_clinic_section",
+  "contact_person",
+  "registered_phone",
+  "registered_email",
+  "address_line_1",
+  "address_line_2",
+  "registered_city",
+  "registered_state",
+  "postal_code",
+  "registered_country",
   "administrator_section",
   "administrator_name",
   "administrator_email",
@@ -21,6 +32,8 @@
   "plan",
   "subscription",
   "subscription_status",
+  "subscription_end_date",
+  "days_remaining",
   "lifecycle_section",
   "enabled",
   "clinic_status",
@@ -28,18 +41,18 @@
  ],
  "fields": [
   {
+   "fieldname": "tenant_id",
+   "fieldtype": "Data",
+   "label": "Tenant ID",
+   "read_only": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
    "fieldname": "tenant_name",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Tenant Name",
-   "reqd": 1,
-   "unique": 1
-  },
-  {
-   "fieldname": "tenant_code",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Tenant Code",
+   "label": "Clinic",
    "reqd": 1,
    "unique": 1
   },
@@ -47,7 +60,52 @@
    "fieldname": "site_name",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Site Name",
+   "label": "Site",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "plan",
+   "fieldtype": "Link",
+   "label": "Plan",
+   "options": "Clinify Plan",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "subscription_end_date",
+   "fieldtype": "Date",
+   "label": "Subscription Valid Until",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "days_remaining",
+   "fieldtype": "Int",
+   "label": "Days Remaining",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "clinic_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "\nActive\nInactive\nSuspended"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "provisioning_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Provisioning",
+   "options": "\nPending\nCreating Site\nInstalling Apps\nConfiguring Clinic\nCreating Subscription\nCreating Administrator\nVerifying\nReady\nFailed\nSuspended"
+  },
+  {
+   "fieldname": "tenant_code",
+   "fieldtype": "Data",
+   "in_list_view": 0,
+   "label": "Tenant Code",
    "reqd": 1,
    "unique": 1
   },
@@ -78,14 +136,6 @@
    "label": "Provisioning"
   },
   {
-   "default": "Pending",
-   "fieldname": "provisioning_status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "Provisioning Status",
-   "options": "\nPending\nCreating Site\nInstalling Apps\nConfiguring Clinic\nCreating Subscription\nCreating Administrator\nVerifying\nReady\nFailed\nSuspended"
-  },
-  {
    "fieldname": "provisioning_error",
    "fieldtype": "Small Text",
    "label": "Provisioning Error"
@@ -101,22 +151,17 @@
    "label": "Subscription"
   },
   {
-   "fieldname": "plan",
-   "fieldtype": "Link",
-   "label": "Plan",
-   "options": "Clinify Plan"
-  },
-  {
    "fieldname": "subscription",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Subscription",
-   "options": "Clinify Subscription"
+   "read_only": 1
   },
   {
    "fieldname": "subscription_status",
    "fieldtype": "Data",
    "label": "Subscription Status",
-   "read_only": 1
+   "read_only": 1,
+   "in_list_view": 0
   },
   {
    "fieldname": "lifecycle_section",
@@ -127,21 +172,65 @@
    "default": "1",
    "fieldname": "enabled",
    "fieldtype": "Check",
-   "in_list_view": 1,
+   "in_list_view": 0,
    "label": "Enabled"
-  },
-  {
-   "default": "Active",
-   "fieldname": "clinic_status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "Clinic Status",
-   "options": "\nActive\nInactive\nSuspended"
   },
   {
    "fieldname": "last_verified_on",
    "fieldtype": "Datetime",
    "label": "Last Verified On"
+  },
+  {
+   "fieldname": "registered_clinic_section",
+   "fieldtype": "Section Break",
+   "label": "Registered Clinic Information"
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Data",
+   "label": "Person In-Charge"
+  },
+  {
+   "fieldname": "registered_phone",
+   "fieldtype": "Data",
+   "label": "Registered Phone"
+  },
+  {
+   "fieldname": "registered_email",
+   "fieldtype": "Data",
+   "label": "Registered Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "fieldname": "address_line_2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "fieldname": "registered_city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "registered_state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "postal_code",
+   "fieldtype": "Data",
+   "label": "Postal Code"
+  },
+  {
+   "fieldname": "registered_country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
   }
  ],
  "grid_page_length": 50,
@@ -171,5 +260,7 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 1
+ "track_changes": 1,
+ "title_field": "tenant_name",
+ "search_fields": "tenant_id,tenant_name,tenant_code,site_name"
 }

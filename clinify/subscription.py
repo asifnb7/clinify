@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import nowdate
+from frappe.utils import getdate, nowdate
 
 from clinify.clinic import get_current_clinic
 
@@ -132,10 +132,13 @@ def is_subscription_active():
     if not subscription.is_active:
         return False
 
-    return (
-        subscription.subscription_status
-        in ALLOWED_SUBSCRIPTION_STATUSES
-    )
+    if subscription.subscription_status not in ALLOWED_SUBSCRIPTION_STATUSES:
+        return False
+
+    if subscription.end_date and getdate(subscription.end_date) < getdate(nowdate()):
+        return False
+
+    return True
 
 
 def can_access_clinify():

@@ -1,5 +1,6 @@
 import frappe
 
+from clinify.access import require_clinify_access
 from clinify.billing import _append_consultation_item
 
 
@@ -48,7 +49,7 @@ def _get_matching_vital_for_encounter(doc):
 
     if getattr(doc, "appointment", None):
 
-        vitals = frappe.get_all(
+        vitals = frappe.get_list(
             "Vital Signs",
             filters={
                 "appointment": doc.appointment,
@@ -69,7 +70,7 @@ def _get_matching_vital_for_encounter(doc):
 
     if getattr(doc, "encounter_date", None):
 
-        vitals = frappe.get_all(
+        vitals = frappe.get_list(
             "Vital Signs",
             filters={
                 "patient": doc.patient,
@@ -98,6 +99,8 @@ def get_matching_vitals(encounter_name):
     Returns None when no vitals exist for the current visit.
     """
 
+    require_clinify_access()
+
     if not encounter_name:
         return None
 
@@ -105,6 +108,9 @@ def get_matching_vitals(encounter_name):
         "Patient Encounter",
         encounter_name,
     )
+
+    if not frappe.has_permission("Patient Encounter", "read", doc.name):
+        frappe.throw("Not permitted.", frappe.PermissionError)
 
     return _get_matching_vital_for_encounter(doc)
 @frappe.whitelist()
@@ -124,12 +130,22 @@ def get_matching_vitals_for_context(
     before the Encounter has been saved.
     """
 
+    require_clinify_access()
+
     if not patient:
         return None
 
+    if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    if appointment and not frappe.has_permission(
+        "Patient Appointment", "read", appointment
+    ):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
     if appointment:
 
-        vitals = frappe.get_all(
+        vitals = frappe.get_list(
             "Vital Signs",
             filters={
                 "patient": patient,
@@ -162,7 +178,7 @@ def get_matching_vitals_for_context(
 
     if encounter_date:
 
-        vitals = frappe.get_all(
+        vitals = frappe.get_list(
             "Vital Signs",
             filters={
                 "patient": patient,
@@ -334,10 +350,15 @@ def create_invoice_from_encounter(encounter_name):
     Legacy Dental Treatment Plan objects are not required.
     """
 
+    require_clinify_access()
+
     encounter = frappe.get_doc(
         "Patient Encounter",
         encounter_name,
     )
+
+    if not frappe.has_permission("Patient Encounter", "read", encounter.name):
+        frappe.throw("Not permitted.", frappe.PermissionError)
 
     if not encounter.appointment:
 
@@ -349,6 +370,14 @@ def create_invoice_from_encounter(encounter_name):
         "Patient Appointment",
         encounter.appointment,
     )
+
+    if not frappe.has_permission(
+        "Patient Appointment", "write", appointment.name
+    ):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    if not frappe.has_permission("Sales Invoice", "create"):
+        frappe.throw("Not permitted.", frappe.PermissionError)
 
     # ---------------------------------------------------------
     # IDEMPOTENCY
@@ -367,6 +396,8 @@ def create_invoice_from_encounter(encounter_name):
             existing_invoice,
         )
     ):
+        if not frappe.has_permission("Sales Invoice", "read", existing_invoice):
+            frappe.throw("Not permitted.", frappe.PermissionError)
         return existing_invoice
 
     # ---------------------------------------------------------

@@ -6,6 +6,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from clinify.saas.provisioning import validate_provision_request
+from clinify.clinify.doctype.clinify_tenant.clinify_tenant import generate_tenant_id
 
 
 BENCH_PATH = Path(frappe.get_app_path("clinify")).parents[2]
@@ -127,6 +128,15 @@ def _bootstrap_site(
     administrator_name,
     plan,
     plan_definition,
+    contact_person=None,
+    registered_phone=None,
+    registered_email=None,
+    address_line_1=None,
+    address_line_2=None,
+    registered_city=None,
+    registered_state=None,
+    postal_code=None,
+    registered_country=None,
 ):
     method = (
         "clinify.saas.tenant_bootstrap.bootstrap_tenant"
@@ -142,6 +152,15 @@ def _bootstrap_site(
             administrator_name,
             plan,
             plan_definition,
+            contact_person,
+            registered_phone,
+            registered_email,
+            address_line_1,
+            address_line_2,
+            registered_city,
+            registered_state,
+            postal_code,
+            registered_country,
         ]
     )
 
@@ -202,6 +221,15 @@ def provision_tenant(
     admin_password,
     administrator_name=None,
     domain=None,
+    contact_person=None,
+    registered_phone=None,
+    registered_email=None,
+    address_line_1=None,
+    address_line_2=None,
+    registered_city=None,
+    registered_state=None,
+    postal_code=None,
+    registered_country=None,
 ):
     """
     Provision a new Clinify tenant from the control site.
@@ -213,48 +241,173 @@ def provision_tenant(
     It intentionally does not delete failed tenant records.
     """
 
-    validation = validate_provision_request(
-        tenant_name=tenant_name,
-        tenant_code=tenant_code,
-        site_name=site_name,
-        administrator_email=administrator_email,
-        plan=plan,
-        domain=domain,
-    )
-
     if not admin_password:
         frappe.throw("Administrator password is required.")
 
-    if _site_exists(validation["site_name"]):
+    tenant = frappe.db.get_value(
+        "Clinify Tenant",
+        {"tenant_code": tenant_code},
+        [
+            "name",
+            "tenant_name",
+            "tenant_code",
+            "site_name",
+            "domain",
+            "administrator_name",
+            "administrator_email",
+            "plan",
+            "contact_person",
+            "registered_phone",
+            "registered_email",
+            "address_line_1",
+            "address_line_2",
+            "registered_city",
+            "registered_state",
+            "postal_code",
+            "registered_country",
+            "provisioning_status",
+            "tenant_id",
+        ],
+        as_dict=True,
+    )
+
+    if tenant:
+        tenant = frappe.get_doc("Clinify Tenant", tenant.name)
+
+        if tenant.provisioning_status not in ("Pending", "Verifying"):
+            frappe.throw(
+                "Only a Pending or Verifying Tenant can be provisioned. "
+                "Current status: {}".format(
+                    tenant.provisioning_status
+                )
+            )
+
+        if tenant.tenant_name != tenant_name:
+            frappe.throw("Tenant Name does not match the saved Tenant.")
+
+        if tenant.site_name != site_name:
+            frappe.throw("Site Name does not match the saved Tenant.")
+
+        if tenant.administrator_email != administrator_email:
+            frappe.throw(
+                "Administrator Email does not match the saved Tenant."
+            )
+
+        if tenant.plan != plan:
+            frappe.throw("Plan does not match the saved Tenant.")
+
+        validation = {
+            "tenant_name": tenant.tenant_name,
+            "tenant_code": tenant.tenant_code,
+            "site_name": tenant.site_name,
+            "domain": tenant.domain,
+            "administrator_email": tenant.administrator_email,
+            "plan": tenant.plan,
+            "contact_person": tenant.contact_person,
+            "registered_phone": tenant.registered_phone,
+            "registered_email": tenant.registered_email,
+            "address_line_1": tenant.address_line_1,
+            "address_line_2": tenant.address_line_2,
+            "registered_city": tenant.registered_city,
+            "registered_state": tenant.registered_state,
+            "postal_code": tenant.postal_code,
+            "registered_country": tenant.registered_country,
+        }
+
+    else:
+        validation = validate_provision_request(
+            tenant_name=tenant_name,
+            tenant_code=tenant_code,
+            site_name=site_name,
+            administrator_email=administrator_email,
+            plan=plan,
+            domain=domain,
+        )
+
+        if _site_exists(validation["site_name"]):
+            frappe.throw(
+                "Site directory already exists: {}".format(
+                    validation["site_name"]
+                )
+            )
+
+        tenant = frappe.get_doc(
+            {
+                "doctype": "Clinify Tenant",
+                "tenant_name": validation["tenant_name"],
+                "tenant_code": validation["tenant_code"],
+                "site_name": validation["site_name"],
+                "domain": validation["domain"],
+                "administrator_name": administrator_name
+                or validation["tenant_name"],
+                "administrator_email": validation[
+                    "administrator_email"
+                ],
+                "plan": validation["plan"],
+                "contact_person": validation["contact_person"],
+                "registered_phone": validation["registered_phone"],
+                "registered_email": validation["registered_email"],
+                "address_line_1": validation["address_line_1"],
+                "address_line_2": validation["address_line_2"],
+                "registered_city": validation["registered_city"],
+                "registered_state": validation["registered_state"],
+                "postal_code": validation["postal_code"],
+                "registered_country": validation["registered_country"],
+                "provisioning_status": "Pending",
+                "enabled": 1,
+                "clinic_status": "Active",
+            }
+        )
+
+        tenant.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+    if (
+        tenant.provisioning_status != "Verifying"
+        and _site_exists(validation["site_name"])
+    ):
         frappe.throw(
             "Site directory already exists: {}".format(
                 validation["site_name"]
             )
         )
 
-    tenant = frappe.get_doc(
-        {
-            "doctype": "Clinify Tenant",
-            "tenant_name": validation["tenant_name"],
-            "tenant_code": validation["tenant_code"],
-            "site_name": validation["site_name"],
-            "domain": validation["domain"],
-            "administrator_name": administrator_name
-            or validation["tenant_name"],
-            "administrator_email": validation[
-                "administrator_email"
-            ],
-            "plan": validation["plan"],
-            "provisioning_status": "Pending",
-            "enabled": 1,
-            "clinic_status": "Active",
-        }
-    )
-
-    tenant.insert(ignore_permissions=True)
-    frappe.db.commit()
-
     try:
+        if tenant.provisioning_status == "Verifying":
+            verification = _verify_site(
+                site_name=validation["site_name"],
+                tenant_code=validation["tenant_code"],
+                administrator_email=validation[
+                    "administrator_email"
+                ],
+            )
+
+            tenant.subscription = verification["subscription"]["name"]
+            tenant.subscription_status = verification["subscription"]["subscription_status"]
+            tenant.subscription_end_date = verification["subscription"]["end_date"]
+
+            if not tenant.tenant_id:
+                tenant.tenant_id = generate_tenant_id(
+                    tenant_name=tenant.tenant_name,
+                    subscription_start_date=verification["subscription"]["start_date"],
+                )
+
+            tenant.provisioning_status = "Ready"
+            tenant.provisioning_error = None
+            tenant.provisioned_on = now_datetime()
+            tenant.last_verified_on = now_datetime()
+            tenant.save(ignore_permissions=True)
+
+            frappe.db.commit()
+
+            return {
+                "success": True,
+                "tenant": tenant.name,
+                "site": tenant.site_name,
+                "status": tenant.provisioning_status,
+                "verification": verification,
+            }
+
         _set_status(tenant, "Creating Site")
 
         _create_site(
@@ -306,6 +459,15 @@ def provision_tenant(
             or validation["tenant_name"],
             plan=validation["plan"],
             plan_definition=plan_definition,
+            contact_person=validation["contact_person"],
+            registered_phone=validation["registered_phone"],
+            registered_email=validation["registered_email"],
+            address_line_1=validation["address_line_1"],
+            address_line_2=validation["address_line_2"],
+            registered_city=validation["registered_city"],
+            registered_state=validation["registered_state"],
+            postal_code=validation["postal_code"],
+            registered_country=validation["registered_country"],
         )
 
         _set_status(tenant, "Verifying")
@@ -318,7 +480,16 @@ def provision_tenant(
             ],
         )
 
+        tenant.subscription = verification["subscription"]["name"]
         tenant.subscription_status = verification["subscription"]["subscription_status"]
+        tenant.subscription_end_date = verification["subscription"]["end_date"]
+
+        if not tenant.tenant_id:
+            tenant.tenant_id = generate_tenant_id(
+                tenant_name=tenant.tenant_name,
+                subscription_start_date=verification["subscription"]["start_date"],
+            )
+
         tenant.provisioning_status = "Ready"
         tenant.provisioning_error = None
         tenant.provisioned_on = now_datetime()
@@ -337,6 +508,11 @@ def provision_tenant(
 
     except Exception as exc:
         error = str(exc)
+
+        try:
+            tenant.reload()
+        except Exception:
+            pass
 
         tenant.provisioning_status = "Failed"
         tenant.provisioning_error = error[:2000]

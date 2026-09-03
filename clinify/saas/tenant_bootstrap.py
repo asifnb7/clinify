@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import today
+from frappe.utils import add_to_date, today
 
 from clinify.saas.provisioning import (
     _clean,
@@ -119,12 +119,40 @@ def _ensure_clinic_configuration(
     tenant_code,
     administrator_email,
     subscription_status,
+    contact_person=None,
+    registered_phone=None,
+    registered_email=None,
+    address_line_1=None,
+    address_line_2=None,
+    registered_city=None,
+    registered_state=None,
+    postal_code=None,
+    registered_country=None,
 ):
     clinic = frappe.get_single("Clinic Configuration")
 
     clinic.clinic_name = tenant_name
     clinic.clinic_code = tenant_code
-    clinic.clinic_email = administrator_email
+
+    # Registered clinic contact information is authoritative
+    # from the control-plane Clinify Tenant during provisioning.
+    clinic.contact_person = _clean(contact_person)
+    clinic.clinic_phone = _clean(registered_phone)
+    clinic.clinic_email = _clean(registered_email) or administrator_email
+
+    address_lines = [
+        _clean(address_line_1),
+        _clean(address_line_2),
+    ]
+    clinic.clinic_address = "\n".join(
+        line for line in address_lines if line
+    )
+
+    clinic.city = _clean(registered_city)
+    clinic.state = _clean(registered_state)
+    clinic.pincode = _clean(postal_code)
+    clinic.country = _clean(registered_country)
+
     clinic.activation_date = clinic.activation_date or today()
     clinic.clinic_status = "Active"
     clinic.subscription_status = subscription_status
@@ -248,13 +276,30 @@ def _ensure_subscription(clinic, plan_code):
         else "Active"
     )
 
+    start_date = clinic.activation_date
+    billing_cycle = _clean(plan.billing_cycle)
+
+    if billing_cycle == "Monthly":
+        end_date = add_to_date(start_date, months=1, days=-1)
+    elif billing_cycle == "Quarterly":
+        end_date = add_to_date(start_date, months=3, days=-1)
+    elif billing_cycle == "Yearly":
+        end_date = add_to_date(start_date, years=1, days=-1)
+    else:
+        frappe.throw(
+            "Unsupported billing cycle: {}".format(
+                billing_cycle
+            )
+        )
+
     subscription = frappe.get_doc({
         "doctype": "Clinify Subscription",
         "clinic": clinic.name,
         "plan": plan.name,
         "subscription_status": subscription_status,
-        "start_date": clinic.activation_date,
-        "billing_cycle": plan.billing_cycle,
+        "start_date": start_date,
+        "end_date": end_date,
+        "billing_cycle": billing_cycle,
         "price": plan.price,
         "currency": plan.currency,
         "is_active": 1,
@@ -335,6 +380,15 @@ def bootstrap_tenant(
     administrator_name=None,
     plan=None,
     plan_definition=None,
+    contact_person=None,
+    registered_phone=None,
+    registered_email=None,
+    address_line_1=None,
+    address_line_2=None,
+    registered_city=None,
+    registered_state=None,
+    postal_code=None,
+    registered_country=None,
 ):
     """
     Bootstrap a newly-created Clinify tenant site.
@@ -354,6 +408,16 @@ def bootstrap_tenant(
 
     tenant_code = _validate_tenant_code(tenant_code)
     administrator_email = _validate_email(administrator_email)
+
+    contact_person = _clean(contact_person)
+    registered_phone = _clean(registered_phone)
+    registered_email = _clean(registered_email)
+    address_line_1 = _clean(address_line_1)
+    address_line_2 = _clean(address_line_2)
+    registered_city = _clean(registered_city)
+    registered_state = _clean(registered_state)
+    postal_code = _clean(postal_code)
+    registered_country = _clean(registered_country)
 
     _ensure_admin_role()
     _ensure_admin_permissions()
@@ -379,6 +443,15 @@ def bootstrap_tenant(
         tenant_code=tenant_code,
         administrator_email=administrator_email,
         subscription_status=subscription_status,
+        contact_person=contact_person,
+        registered_phone=registered_phone,
+        registered_email=registered_email,
+        address_line_1=address_line_1,
+        address_line_2=address_line_2,
+        registered_city=registered_city,
+        registered_state=registered_state,
+        postal_code=postal_code,
+        registered_country=registered_country,
     )
 
     local_plan = _ensure_plan(plan_definition)
@@ -450,6 +523,7 @@ def verify_tenant(
             "plan",
             "subscription_status",
             "start_date",
+            "end_date",
             "billing_cycle",
             "price",
             "currency",

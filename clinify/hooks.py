@@ -64,6 +64,7 @@ app_include_js = "/assets/clinify/js/reception_route.js"
 
 doctype_list_js = {
     "Clinify Subscription": "public/js/clinify_subscription_list.js",
+    "Clinify Tenant": "public/js/clinify_tenant_list.js",
 }
 
 doctype_js = {

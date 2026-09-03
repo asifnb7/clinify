@@ -1,6 +1,7 @@
 import frappe
 from frappe.utils import nowdate
 
+from clinify.access import require_clinify_access
 from clinify.encounter import create_invoice_from_encounter
 
 
@@ -10,9 +11,11 @@ def get_todays_appointments():
     Return today's appointments for the Reception Dashboard.
     """
 
+    require_clinify_access()
+
     from clinify.scripts.dev import doctor_name, patient_journey
 
-    appointments = frappe.get_all(
+    appointments = frappe.get_list(
         "Patient Appointment",
         filters={
             "appointment_date": nowdate(),
@@ -56,7 +59,9 @@ def get_billing_queue():
     Return billing queue for the Reception Dashboard.
     """
 
-    invoices = frappe.get_all(
+    require_clinify_access()
+
+    invoices = frappe.get_list(
         "Sales Invoice",
         filters={"docstatus": ["!=", 2]},
 fields=[
@@ -83,7 +88,7 @@ order_by="posting_date desc, creation desc",
     doctor_lookup = {}
 
     if practitioner_ids:
-        practitioners = frappe.get_all(
+        practitioners = frappe.get_list(
             "Healthcare Practitioner",
             filters={"name": ["in", list(practitioner_ids)]},
             fields=["name", "practitioner_name"],
@@ -121,11 +126,16 @@ def check_in_patient(appointment):
     Check in a patient from the Reception Dashboard.
     """
 
+    require_clinify_access()
+
     appt = frappe.get_doc("Patient Appointment", appointment)
+
+    if not frappe.has_permission("Patient Appointment", "write", appt.name):
+        frappe.throw("Not permitted.", frappe.PermissionError)
 
     appt.custom_reception_status = "Checked In"
 
-    appt.save(ignore_permissions=True)
+    appt.save()
 
     frappe.db.commit()
 
@@ -153,9 +163,11 @@ def get_ready_for_billing():
     Encounter billing engine.
     """
 
+    require_clinify_access()
+
     from clinify.scripts.dev import doctor_name
 
-    appointments = frappe.get_all(
+    appointments = frappe.get_list(
         "Patient Appointment",
         filters={
             "custom_reception_status": "Billing",
@@ -181,18 +193,24 @@ def get_ready_for_billing():
         if appt.ref_sales_invoice:
             continue
 
-        encounter_name = frappe.db.get_value(
+        encounter_names = frappe.get_list(
             "Patient Encounter",
             {
                 "appointment": appt.name,
                 "patient": appt.patient,
                 "docstatus": ["!=", 2],
             },
-            "name",
+            pluck="name",
             order_by="creation desc",
+            limit_page_length=1,
         )
 
+        encounter_name = encounter_names[0] if encounter_names else None
+
         if not encounter_name:
+            continue
+
+        if not frappe.has_permission("Patient Encounter", "read", encounter_name):
             continue
 
         appt["encounter"] = encounter_name
@@ -214,10 +232,15 @@ def create_invoice_from_ready_appointment(appointment):
     The Patient Encounter is the single source of truth.
     """
 
+    require_clinify_access()
+
     appt = frappe.get_doc(
         "Patient Appointment",
         appointment,
     )
+
+    if not frappe.has_permission("Patient Appointment", "write", appt.name):
+        frappe.throw("Not permitted.", frappe.PermissionError)
 
     if appt.ref_sales_invoice:
         if frappe.db.exists(
@@ -229,21 +252,30 @@ def create_invoice_from_ready_appointment(appointment):
                 "invoice": appt.ref_sales_invoice,
             }
 
-    encounter_name = frappe.db.get_value(
+    encounter_names = frappe.get_list(
         "Patient Encounter",
         {
             "appointment": appt.name,
             "patient": appt.patient,
             "docstatus": ["!=", 2],
         },
-        "name",
+        pluck="name",
         order_by="creation desc",
+        limit_page_length=1,
     )
+
+    encounter_name = encounter_names[0] if encounter_names else None
 
     if not encounter_name:
         frappe.throw(
             "No Patient Encounter is linked to this appointment."
         )
+
+    if not frappe.has_permission("Patient Encounter", "read", encounter_name):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    if not frappe.has_permission("Sales Invoice", "create"):
+        frappe.throw("Not permitted.", frappe.PermissionError)
 
     invoice_name = create_invoice_from_encounter(
         encounter_name,
@@ -290,12 +322,14 @@ def search_patients(search_text):
     - Mobile Number
     """
 
+    require_clinify_access()
+
     search_text = (search_text or "").strip()
 
     if not search_text:
         return []
 
-    return frappe.get_all(
+    return frappe.get_list(
         "Patient",
         or_filters=[
             {
@@ -330,10 +364,15 @@ def get_reception_patient(patient):
     Return the basic patient details required by the Reception Patient Workspace.
     """
 
+    require_clinify_access()
+
     if not patient:
         frappe.throw("Patient is required.")
 
     if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    if not frappe.has_permission("Sales Invoice", "read"):
         frappe.throw("Not permitted.", frappe.PermissionError)
 
     patient_details = frappe.db.get_value(
@@ -359,20 +398,19 @@ def get_reception_patient(patient):
     # (Same logic used by Billing)
     # ---------------------------------------------------------
 
-    outstanding = frappe.db.sql(
-        """
-        SELECT COALESCE(SUM(outstanding_amount), 0)
+    invoices = frappe.get_list(
+        "Sales Invoice",
+        filters={
+            "patient": patient,
+            "docstatus": ["!=", 2],
+        },
+        fields=["outstanding_amount"],
+    )
 
-        FROM `tabSales Invoice`
-
-        WHERE
-            patient = %s
-            AND docstatus != 2
-        """,
-        (patient,),
-    )[0][0]
-
-    patient_details["account_balance"] = float(outstanding or 0)
+    patient_details["account_balance"] = sum(
+        float(invoice.get("outstanding_amount") or 0)
+        for invoice in invoices
+    )
 
     return patient_details
 
@@ -383,7 +421,12 @@ def get_patient_appointments(patient):
     together with doctor name and billing information.
     """
 
-    appointments = frappe.get_all(
+    require_clinify_access()
+
+    if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    appointments = frappe.get_list(
         "Patient Appointment",
         filters={"patient": patient},
         fields=[
@@ -421,6 +464,9 @@ def get_patient_appointments(patient):
 
         if invoice:
 
+            if not frappe.has_permission("Sales Invoice", "read", invoice):
+                frappe.throw("Not permitted.", frappe.PermissionError)
+
             invoice_data = frappe.db.get_value(
                 "Sales Invoice",
                 invoice,
@@ -449,7 +495,12 @@ def get_patient_encounters(patient):
     Return the latest Patient Encounters for the selected patient.
     """
 
-    encounters = frappe.get_all(
+    require_clinify_access()
+
+    if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    encounters = frappe.get_list(
         "Patient Encounter",
         filters={
             "patient": patient,
@@ -477,7 +528,12 @@ def get_patient_billing(patient):
     Return all Sales Invoices for the selected patient.
     """
 
-    invoices = frappe.get_all(
+    require_clinify_access()
+
+    if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    invoices = frappe.get_list(
         "Sales Invoice",
         filters={
             "patient": patient,
@@ -515,8 +571,19 @@ def get_patient_payments(patient):
     Return all Payment Entries linked to the patient's Sales Invoices.
     """
 
+    require_clinify_access()
+
+    if not frappe.has_permission("Patient", "read", patient):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    if not frappe.has_permission("Sales Invoice", "read"):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
+    if not frappe.has_permission("Payment Entry", "read"):
+        frappe.throw("Not permitted.", frappe.PermissionError)
+
     # Get all submitted Sales Invoices for this patient
-    invoices = frappe.get_all(
+    invoices = frappe.get_list(
         "Sales Invoice",
         filters={
             "patient": patient,
@@ -567,7 +634,9 @@ def get_dashboard_summary():
     Return Reception Dashboard summary statistics.
     """
 
-    appointments = frappe.get_all(
+    require_clinify_access()
+
+    appointments = frappe.get_list(
         "Patient Appointment",
         filters={
             "appointment_date": nowdate(),
