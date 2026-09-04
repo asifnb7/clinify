@@ -91,6 +91,7 @@ fixtures = [
     "Workspace",
     "Custom Field",
     "Property Setter",
+    "Client Script",
     "Server Script",
     {
         "doctype": "Custom DocPerm",

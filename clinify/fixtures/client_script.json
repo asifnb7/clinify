@@ -1,0 +1,13 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Patient Encounter",
+  "enabled": 1,
+  "module": null,
+  "name": "Dental Services",
+  "owner": "Administrator",
+  "script": "frappe.ui.form.on(\"Patient Encounter\", {\n    refresh(frm) {\n    },\n\n    validate(frm) {\n        let rows = frm.doc.custom_dental_services || [];\n\n        rows.forEach(function(row) {\n            if (!row.dental_service)\n                return;\n\n            frappe.db.get_doc(\"Dental Service\", row.dental_service)\n                .then(service => {\n                    if (\n                        service.requires_tooth &&\n                        !row.tooth_area\n                    ) {\n                        frappe.throw(\n                            __(\"Please enter Tooth / Area for {0}\",\n                                [service.service_name]\n                            )\n                        );\n                    }\n                });\n        });\n    }\n});\n\n\nfrappe.ui.form.on(\"Clinify Encounter Service\", {\n\n    dental_service(frm, cdt, cdn) {\n        let row = locals[cdt][cdn];\n\n        if (!row.dental_service)\n            return;\n\n        frappe.db.get_doc(\n            \"Dental Service\",\n            row.dental_service\n        ).then(service => {\n\n            frappe.model.set_value(\n                cdt,\n                cdn,\n                \"qty\",\n                service.default_qty || 1\n            );\n\n        });\n\n    }\n\n});",
+  "view": "Form"
+ }
+]
