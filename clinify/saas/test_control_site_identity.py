@@ -28,17 +28,36 @@ class FakeUser:
         self._fake.saved_users.append(self.name)
 
 
+class FakeRole:
+    def __init__(self, values, fake):
+        self.__dict__.update(values)
+        self._fake = fake
+
+    def insert(self, **_kwargs):
+        self._fake.roles[self.role_name] = self
+
+    def save(self, **_kwargs):
+        self._fake.saved_roles.append(self.role_name)
+
+
 class FakeFrappe:
-    def __init__(self, tenant_names=None, users=None):
+    def __init__(self, tenant_names=None, users=None, roles=None):
         self.tenant_names = tenant_names or ["TENANT-1"]
         self.users = users or {}
+        self.roles = roles or {}
         self.created_user_values = []
         self.saved_users = []
+        self.saved_roles = []
         self.commit_count = 0
-        self.db = SimpleNamespace(commit=self.commit)
+        self.db = SimpleNamespace(commit=self.commit, exists=self.exists)
 
     def commit(self):
         self.commit_count += 1
+
+    def exists(self, doctype, name):
+        if doctype == "Role":
+            return name if name in self.roles else None
+        raise AssertionError("unexpected exists: {}".format(doctype))
 
     def get_all(self, doctype, filters=None, fields=None):
         if doctype == "Clinify Tenant":
@@ -58,9 +77,13 @@ class FakeFrappe:
 
     def get_doc(self, value, name=None):
         if isinstance(value, dict):
+            if value["doctype"] == "Role":
+                return FakeRole(value, self)
             return FakeUser(value, self)
         if value == "User":
             return self.users[name]
+        if value == "Role":
+            return self.roles[name]
         raise AssertionError("unexpected get_doc: {}".format(value))
 
 
@@ -88,7 +111,7 @@ class TestControlSiteAdministrator(unittest.TestCase):
                 admin_password=password,
             )
 
-    def test_creates_enabled_system_user_without_tenant_role(self):
+    def test_creates_enabled_system_user_with_only_control_role(self):
         fake = FakeFrappe()
 
         user = self._ensure(fake)
@@ -98,8 +121,14 @@ class TestControlSiteAdministrator(unittest.TestCase):
         self.assertEqual(user.enabled, 1)
         created = fake.created_user_values[0]
         self.assertEqual(created["new_password"], "transient-secret")
-        self.assertEqual(created["roles"], [])
-        self.assertNotIn(tenant_bootstrap.CLINIFY_ADMIN_ROLE, str(created))
+        self.assertEqual(
+            created["roles"],
+            [{"doctype": "Has Role", "role": control_site_identity.CLINIFY_CONTROL_USER_ROLE}],
+        )
+        self.assertIn(control_site_identity.CLINIFY_CONTROL_USER_ROLE, fake.roles)
+        self.assertEqual(fake.roles[control_site_identity.CLINIFY_CONTROL_USER_ROLE].desk_access, 1)
+        self.assertEqual(fake.roles[control_site_identity.CLINIFY_CONTROL_USER_ROLE].is_custom, 1)
+        self.assertNotIn(tenant_bootstrap.CLINIFY_ADMIN_ROLE, str(created["roles"]))
 
     def test_existing_matching_system_user_is_left_intact(self):
         user = control_user()
@@ -170,6 +199,7 @@ class TestControlSiteAdministrator(unittest.TestCase):
 
         self.assertEqual(len(fake.created_user_values), 1)
         self.assertEqual(fake.created_user_values[0]["new_password"], "first-transient-secret")
+        self.assertEqual(len(fake.roles), 1)
         self.assertEqual(fake.tenant_names, ["TENANT-1"])
         self.assertTrue(all(values["doctype"] == "User" for values in fake.created_user_values))
 

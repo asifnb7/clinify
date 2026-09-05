@@ -5,6 +5,45 @@ import frappe
 from clinify.saas.provisioning import _validate_email
 
 
+CLINIFY_CONTROL_USER_ROLE = "Clinify Control User"
+
+
+def _ensure_control_user_role():
+    """Provide the minimal desk-access role required for a System User."""
+
+    existing = frappe.db.exists("Role", CLINIFY_CONTROL_USER_ROLE)
+
+    if existing:
+        role = frappe.get_doc("Role", existing)
+        changed = False
+
+        if not role.desk_access:
+            role.desk_access = 1
+            changed = True
+
+        if not role.is_custom:
+            role.is_custom = 1
+            changed = True
+
+        if changed:
+            role.save(ignore_permissions=True)
+            frappe.db.commit()
+
+        return role
+
+    role = frappe.get_doc(
+        {
+            "doctype": "Role",
+            "role_name": CLINIFY_CONTROL_USER_ROLE,
+            "desk_access": 1,
+            "is_custom": 1,
+        }
+    )
+    role.insert(ignore_permissions=True)
+    frappe.db.commit()
+    return role
+
+
 def _tenant_names_for_email(administrator_email):
     tenants = frappe.get_all(
         "Clinify Tenant",
@@ -108,6 +147,7 @@ def ensure_control_site_administrator(
 
         return user
 
+    _ensure_control_user_role()
     first_name, last_name = _name_parts(administrator_name)
     user = frappe.get_doc(
         {
@@ -118,6 +158,12 @@ def ensure_control_site_administrator(
             "enabled": 1,
             "user_type": "System User",
             "send_welcome_email": 0,
+            "roles": [
+                {
+                    "doctype": "Has Role",
+                    "role": CLINIFY_CONTROL_USER_ROLE,
+                }
+            ],
             # Frappe stores only its password hash in __Auth.  This transient
             # field is not a Clinify Tenant or other control-plane field.
             "new_password": admin_password,
