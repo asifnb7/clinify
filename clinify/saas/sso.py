@@ -156,10 +156,12 @@ def _handoff_page(destination, reference):
 
 
 def on_session_creation(login_manager=None):
+    user = getattr(login_manager, "user", None) or frappe.session.user
+    if user in {"Guest", "Administrator"}:
+        return
     if not _is_control_site():
         return
-    user = getattr(login_manager, "user", None) or frappe.session.user
-    if user in {"Guest", "Administrator"} or frappe.db.get_value("User", user, "user_type") != "System User" or "System Manager" in frappe.get_roles(user):
+    if frappe.db.get_value("User", user, "user_type") != "System User" or "System Manager" in frappe.get_roles(user):
         return
     try:
         reference = _issue_handoff(_tenant_for_user(user), user, frappe.session.sid)
