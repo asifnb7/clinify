@@ -1,0 +1,12 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Continuing to your Clinify site{% endblock %}
+
+{% block page_content %}
+<meta name="referrer" content="no-referrer">
+<form id="clinify-sso-handoff" method="post" action="{{ handoff_destination }}">
+	<input type="hidden" name="reference" value="{{ handoff_reference }}">
+</form>
+<script>document.getElementById("clinify-sso-handoff").submit();</script>
+<noscript><button form="clinify-sso-handoff" type="submit">Continue</button></noscript>
+{% endblock %}
