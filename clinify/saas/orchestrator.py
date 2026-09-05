@@ -6,6 +6,10 @@ import frappe
 from frappe.utils import now_datetime
 
 from clinify.saas.provisioning import validate_provision_request
+from clinify.saas.control_site_identity import (
+    ensure_control_site_administrator,
+    validate_control_site_administrator,
+)
 from clinify.clinify.doctype.clinify_tenant.clinify_tenant import generate_tenant_id
 
 
@@ -322,15 +326,6 @@ def provision_tenant(
             administrator_email=administrator_email,
             plan=plan,
             domain=domain,
-            contact_person=contact_person,
-            registered_phone=registered_phone,
-            registered_email=registered_email,
-            address_line_1=address_line_1,
-            address_line_2=address_line_2,
-            registered_city=registered_city,
-            registered_state=registered_state,
-            postal_code=postal_code,
-            registered_country=registered_country,
         )
 
         if _site_exists(validation["site_name"]):
@@ -382,7 +377,21 @@ def provision_tenant(
         )
 
     try:
+        # Fail collision checks before creating the tenant site.  The User is
+        # created only after the tenant-local bootstrap has succeeded.
+        validate_control_site_administrator(
+            tenant=tenant,
+            administrator_email=validation["administrator_email"],
+        )
+
         if tenant.provisioning_status == "Verifying":
+            ensure_control_site_administrator(
+                tenant=tenant,
+                administrator_email=validation["administrator_email"],
+                administrator_name=tenant.administrator_name,
+                admin_password=admin_password,
+            )
+
             verification = _verify_site(
                 site_name=validation["site_name"],
                 tenant_code=validation["tenant_code"],
@@ -477,6 +486,14 @@ def provision_tenant(
             registered_state=validation["registered_state"],
             postal_code=validation["postal_code"],
             registered_country=validation["registered_country"],
+        )
+
+        ensure_control_site_administrator(
+            tenant=tenant,
+            administrator_email=validation["administrator_email"],
+            administrator_name=administrator_name
+            or validation["tenant_name"],
+            admin_password=admin_password,
         )
 
         _set_status(tenant, "Verifying")

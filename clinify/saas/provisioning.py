@@ -163,6 +163,16 @@ def validate_provision_request(
                 "Domain is already registered: {}".format(domain)
             )
 
+    existing_administrator = frappe.db.exists(
+        "Clinify Tenant",
+        {"administrator_email": administrator_email},
+    )
+
+    if existing_administrator:
+        frappe.throw(
+            "Administrator Email is already registered to another Tenant."
+        )
+
     return {
         "valid": True,
         "tenant_name": tenant_name,
