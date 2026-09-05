@@ -60,7 +60,7 @@ frappe.listview_settings["Clinify Tenant"] = {
              */
 
             const subject = {
-                type: "Field",
+                type: "Subject",
                 df: get_df("tenant_id"),
             };
 
