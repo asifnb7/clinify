@@ -254,6 +254,34 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
 
+    function sameOriginDestination(value, expectedPath) {
+        if (typeof value !== "string" || !value) {
+            return null;
+        }
+
+        try {
+            const destination = new URL(value, window.location.origin);
+            if (destination.origin !== window.location.origin) {
+                return null;
+            }
+
+            if (
+                expectedPath &&
+                (
+                    destination.pathname !== expectedPath ||
+                    destination.search ||
+                    destination.hash
+                )
+            ) {
+                return null;
+            }
+
+            return destination.href;
+        } catch (err) {
+            return null;
+        }
+    }
+
     form.addEventListener("submit", async function (e) {
 
         e.preventDefault();
@@ -273,12 +301,37 @@ document.addEventListener("DOMContentLoaded", function () {
                     "&pwd=" + encodeURIComponent(pwd)
             });
 
+            const contentType = response.headers.get("Content-Type") || "";
+
+            if (!contentType.includes("application/json")) {
+                throw new Error("Login returned an unexpected response");
+            }
+
             const data = await response.json();
 
             console.log(data);
 
             if (data.message === "Logged In") {
-                window.location.href = data.home_page || "/app";
+                const handoffDestination = sameOriginDestination(
+                    data.clinify_handoff_url,
+                    "/api/method/clinify.saas.sso.begin_handoff"
+                );
+
+                if (handoffDestination) {
+                    window.location.assign(handoffDestination);
+                    return;
+                }
+
+                const destination = sameOriginDestination(
+                    data.redirect_to || data.home_page
+                );
+
+                if (destination) {
+                    window.location.assign(destination);
+                    return;
+                }
+
+                throw new Error("Login destination is invalid");
             } else {
                 alert("Invalid username or password");
             }

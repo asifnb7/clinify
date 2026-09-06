@@ -373,6 +373,24 @@ def _ensure_admin_user(
     return user
 
 
+
+def _finalize_frappe_setup():
+    """
+    Finalize the tenant site's Frappe setup state.
+
+    This runs after the Clinify administrator has been created.
+    Frappe owns the setup-completion rules, so delegate the
+    calculation to its Installed Applications singleton.
+    """
+    frappe.get_single("Installed Applications").update_versions()
+
+    if not frappe.is_setup_complete():
+        frappe.throw(
+            "Tenant setup could not be finalized by Frappe."
+        )
+
+
+
 def bootstrap_tenant(
     tenant_name,
     tenant_code,
@@ -472,6 +490,8 @@ def bootstrap_tenant(
         administrator_email=administrator_email,
         administrator_name=administrator_name,
     )
+
+    _finalize_frappe_setup()
 
     verification = verify_tenant(
         tenant_code=tenant_code,

@@ -39,8 +39,33 @@ class TestClinifySso(unittest.TestCase):
 
     def test_https_and_open_redirect_policy(self):
         with patch.object(sso, "_setting", side_effect=lambda key: {"CLINIFY_CONTROL_URL": "http://control.example"}.get(key)):
-            with self.assertRaises(RuntimeError): sso._control_url()
-        with self.assertRaises(RuntimeError): sso._tenant_domain("evil.example")
+            with self.assertRaises(RuntimeError):
+                sso._control_url()
+        with self.assertRaises(RuntimeError):
+            sso._tenant_domain("evil.example")
+
+    def test_local_development_allows_localhost_http_only(self):
+        values = {
+            "CLINIFY_CONTROL_URL": "http://clinify.localhost",
+            "CLINIFY_SSO_LOCAL_DEVELOPMENT": "true",
+        }
+        with patch.object(sso, "_setting", side_effect=values.get):
+            self.assertEqual(sso._control_url(), "http://clinify.localhost")
+
+        values["CLINIFY_CONTROL_URL"] = "http://evil.example"
+        with patch.object(sso, "_setting", side_effect=values.get):
+            with self.assertRaises(RuntimeError):
+                sso._control_url()
+
+    def test_local_development_tenant_handoff_scheme(self):
+        values = {"CLINIFY_SSO_LOCAL_DEVELOPMENT": "true"}
+        with patch.object(sso, "_setting", side_effect=values.get):
+            self.assertEqual(sso._tenant_handoff_scheme("beta-dental.localhost"), "http")
+            self.assertEqual(sso._tenant_handoff_scheme("beta-dental.salniz.com"), "https")
+
+        values["CLINIFY_SSO_LOCAL_DEVELOPMENT"] = "false"
+        with patch.object(sso, "_setting", side_effect=values.get):
+            self.assertEqual(sso._tenant_handoff_scheme("beta-dental.localhost"), "https")
 
     def test_redemption_revalidates_tenant_audience_and_destination(self):
         payload = {"tenant": "TENANT-1", "user": "admin@example.test", "site": "clinic1.salniz.com", "domain": "clinic1.salniz.com", "aud": "clinic1.salniz.com|clinic1.salniz.com"}

@@ -30,12 +30,35 @@ def _secret():
     return secret.encode()
 
 
+def _local_development_enabled():
+    value = _setting("CLINIFY_SSO_LOCAL_DEVELOPMENT")
+    return str(value or "").lower() in {"1", "true", "yes"}
+
+
 def _control_url():
     url = (_setting("CLINIFY_CONTROL_URL") or "").rstrip("/")
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+    valid_local_http = (
+        _local_development_enabled()
+        and parsed.scheme == "http"
+        and parsed.hostname
+        and parsed.hostname.endswith(".localhost")
+    )
+    valid_https = parsed.scheme == "https"
+
+    if (
+        not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or not (valid_https or valid_local_http)
+    ):
         raise RuntimeError("Clinify control URL must be an HTTPS origin.")
+
     return url
+
+
+def _tenant_handoff_scheme(domain):
+    return "http" if _local_development_enabled() and domain.endswith(".localhost") else "https"
 
 
 def _control_site():
@@ -49,7 +72,7 @@ def _is_control_site():
 def _tenant_domain(domain):
     domain = (domain or "").strip().lower()
     parsed = urlsplit("https://" + domain)
-    local = (_setting("CLINIFY_SSO_LOCAL_DEVELOPMENT") or "").lower() in {"1", "true", "yes"}
+    local = _local_development_enabled()
     valid_local = local and domain.endswith(".localhost")
     if not domain or parsed.hostname != domain or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password or not (domain.endswith(".salniz.com") or valid_local):
         raise RuntimeError("Tenant domain is invalid.")
@@ -165,8 +188,9 @@ def on_session_creation(login_manager=None):
         return
     try:
         reference = _issue_handoff(_tenant_for_user(user), user, frappe.session.sid)
-        frappe.local.response["type"] = "redirect"
-        frappe.local.response["location"] = _control_url() + "/api/method/clinify.saas.sso.begin_handoff"
+        frappe.local.response["clinify_handoff_url"] = (
+            _control_url() + "/api/method/clinify.saas.sso.begin_handoff"
+        )
     except Exception as exc:
         frappe.respond_as_web_page("Clinify sign-in unavailable", str(exc), http_status_code=403)
 
@@ -181,7 +205,8 @@ def begin_handoff():
         if payload["user"] != frappe.session.user or payload["sid"] != frappe.session.sid:
             raise RuntimeError("The Clinify handoff does not belong to this session.")
         _tenant_for_handoff(payload)
-        _handoff_page("https://" + payload["domain"] + "/api/method/clinify.saas.sso.consume_handoff", reference)
+        scheme = _tenant_handoff_scheme(payload["domain"])
+        _handoff_page(scheme + "://" + payload["domain"] + "/api/method/clinify.saas.sso.consume_handoff", reference)
     except Exception as exc:
         frappe.respond_as_web_page("Clinify sign-in unavailable", str(exc), http_status_code=403)
 
