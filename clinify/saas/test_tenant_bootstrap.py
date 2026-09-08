@@ -19,30 +19,45 @@ class TestTenantBootstrapSetupFinalization(unittest.TestCase):
             "get_single",
             return_value=installed_apps,
         ) as get_single, patch.object(
-            frappe,
-            "is_setup_complete",
+            frappe.db,
+            "exists",
             return_value=True,
+        ), patch.object(
+            frappe.db,
+            "set_value",
+        ), patch.object(
+            frappe.db,
+            "set_single_value",
+        ), patch.object(
+            frappe,
+            "clear_cache",
+        ), patch.object(
+            frappe.db,
+            "commit",
         ):
             tenant_bootstrap._finalize_frappe_setup()
 
         get_single.assert_called_once_with("Installed Applications")
         self.assertTrue(installed_apps.called)
 
-    def test_finalize_frappe_setup_fails_closed(self):
+    def test_finalize_frappe_setup_fails_closed_when_required_app_is_missing(self):
         class InstalledApps:
             def update_versions(self):
                 self.called = True
 
         installed_apps = InstalledApps()
 
+        def app_exists(doctype, filters):
+            return filters["app_name"] == "frappe"
+
         with patch.object(
             frappe,
             "get_single",
             return_value=installed_apps,
         ) as get_single, patch.object(
-            frappe,
-            "is_setup_complete",
-            return_value=False,
+            frappe.db,
+            "exists",
+            side_effect=app_exists,
         ):
             with self.assertRaises(frappe.ValidationError):
                 tenant_bootstrap._finalize_frappe_setup()

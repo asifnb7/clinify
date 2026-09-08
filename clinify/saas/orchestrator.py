@@ -86,6 +86,10 @@ def _create_site(site_name, admin_password):
             "--db-root-password",
             db_admin_password,
             "--install-app",
+            "erpnext",
+            "--install-app",
+            "healthcare",
+            "--install-app",
             CLINIFY_APP,
         ]
     )
@@ -435,9 +439,9 @@ def provision_tenant(
 
         _set_status(tenant, "Installing Apps")
 
-        # new-site already installed Clinify through
-        # --install-app. This status exists so the state
-        # machine remains explicit.
+        # new-site already installed the required app stack
+        # through --install-app. This status exists so the
+        # state machine remains explicit.
         installed_apps = _run_bench(
             [
                 "--site",

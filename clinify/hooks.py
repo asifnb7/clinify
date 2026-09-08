@@ -21,7 +21,7 @@ app_license = "mit"
 # Installation
 # ------------
 # before_install = "clinify.install.before_install"
-# after_install = "clinify.install.after_install"
+after_install = "clinify.install.after_install"
 
 # Uninstallation
 # --------------
@@ -47,7 +47,7 @@ app_license = "mit"
 
 # Testing
 # -------
-# before_tests = "clinify.tests.before_tests"
+before_tests = "clinify.tests.before_tests"
 
 # Override Methods
 # ----------------

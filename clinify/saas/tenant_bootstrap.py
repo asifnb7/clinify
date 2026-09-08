@@ -1,5 +1,7 @@
 import frappe
-from frappe.utils import add_to_date, today
+from frappe.utils import add_to_date, now_datetime, today
+
+from erpnext.setup.setup_wizard.operations import install_fixtures as erpnext_fixtures
 
 from clinify.saas.provisioning import (
     _clean,
@@ -374,21 +376,390 @@ def _ensure_admin_user(
 
 
 
+def _ensure_erpnext_foundation_fixtures():
+    """Ensure the minimal ERPNext foundation records required by Company/Healthcare."""
+    from frappe.desk.page.setup_wizard.setup_wizard import make_records
+    from erpnext.setup.setup_wizard.operations.install_fixtures import add_sale_stages
+
+    foundation_records = [
+        {
+            "doctype": "Item Group",
+            "item_group_name": "Products",
+            "is_group": 0,
+            "parent_item_group": "All Item Groups",
+        },
+        {
+            "doctype": "Item Group",
+            "item_group_name": "Services",
+            "is_group": 0,
+            "parent_item_group": "All Item Groups",
+        },
+        {
+            "doctype": "Warehouse Type",
+            "name": "Transit",
+        },
+        {
+            "doctype": "Supplier Group",
+            "supplier_group_name": "All Supplier Groups",
+            "is_group": 1,
+        },
+        {
+            "doctype": "Customer Group",
+            "customer_group_name": "All Customer Groups",
+            "is_group": 1,
+        },
+        {
+            "doctype": "Sales Person",
+            "sales_person_name": "Sales Team",
+            "is_group": 1,
+            "parent_sales_person": "",
+        },
+        {
+            "doctype": "Territory",
+            "name": "All Territories",
+            "territory_name": "All Territories",
+            "is_group": 1,
+            "parent_territory": "",
+        },
+    ]
+
+    for record in foundation_records:
+        doctype = record["doctype"]
+
+        if doctype == "Warehouse Type":
+            exists = frappe.db.exists(doctype, record["name"])
+        elif doctype == "Item Group":
+            exists = frappe.db.exists(doctype, record["item_group_name"])
+        elif doctype == "Supplier Group":
+            exists = frappe.db.exists(doctype, record["supplier_group_name"])
+        elif doctype == "Customer Group":
+            exists = frappe.db.exists(doctype, record["customer_group_name"])
+        elif doctype == "Sales Person":
+            exists = frappe.db.exists(doctype, record["sales_person_name"])
+        elif doctype == "Territory":
+            exists = frappe.db.exists(doctype, record["name"])
+        else:
+            exists = False
+
+        if not exists:
+            make_records([record])
+
+    # ERPNext's standard setup wizard also supplies the standard Stock Entry
+    # Types. Fresh tenant provisioning does not run the broad ERPNext fixture
+    # installer, so create only these required standard masters here.
+    stock_entry_types = [
+        ("Material Issue", "Material Issue"),
+        ("Material Receipt", "Material Receipt"),
+        ("Material Transfer", "Material Transfer"),
+        ("Manufacture", "Manufacture"),
+        ("Repack", "Repack"),
+        ("Disassemble", "Disassemble"),
+        ("Send to Subcontractor", "Send to Subcontractor"),
+        ("Material Transfer for Manufacture", "Material Transfer for Manufacture"),
+        ("Material Consumption for Manufacture", "Material Consumption for Manufacture"),
+    ]
+
+    for name, purpose in stock_entry_types:
+        if not frappe.db.exists("Stock Entry Type", name):
+            frappe.get_doc(
+                {
+                    "doctype": "Stock Entry Type",
+                    "name": name,
+                    "purpose": purpose,
+                    "is_standard": 1,
+                }
+            ).insert(ignore_permissions=True)
+
+    # ERPNext's standard setup wizard also supplies the standard Party Type
+    # account mappings. Fresh tenant provisioning intentionally avoids the
+    # broad ERPNext fixture installer, so create only these required masters.
+    party_types = [
+        ("Customer", "Receivable"),
+        ("Supplier", "Payable"),
+        ("Employee", "Payable"),
+        ("Shareholder", "Payable"),
+    ]
+
+    for party_type, account_type in party_types:
+        if not frappe.db.exists("Party Type", party_type):
+            frappe.get_doc(
+                {
+                    "doctype": "Party Type",
+                    "party_type": party_type,
+                    "account_type": account_type,
+                }
+            ).insert(ignore_permissions=True)
+
+    # ERPNext's standard UOM data is normally installed by add_uom_data().
+    # Fresh-tenant provisioning intentionally avoids the broad fixture
+    # installer, so guarantee the specific standard UOM required by
+    # Healthcare medication tests.
+    if not frappe.db.exists("UOM", "Nos"):
+        frappe.get_doc(
+            {
+                "doctype": "UOM",
+                "uom_name": "Nos",
+                "name": "Nos",
+                "enabled": 1,
+                "must_be_whole_number": 1,
+            }
+        ).db_insert()
+
+    # ERPNext's standard setup wizard also supplies the Cash Mode of Payment.
+    # Fresh-tenant provisioning intentionally avoids the broad fixture
+    # installer, so guarantee this standard dependency explicitly.
+    if not frappe.db.exists("Mode of Payment", "Cash"):
+        frappe.get_doc(
+            {
+                "doctype": "Mode of Payment",
+                "mode_of_payment": "Cash",
+                "type": "Cash",
+                "enabled": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+    # ERPNext's standard setup wizard supplies the CRM Sales Stage masters.
+    # Only install them when the foundation is missing; do not run the
+    # broad ERPNext fixture installer.
+    if not frappe.db.exists("Sales Stage", "Prospecting"):
+        add_sale_stages()
+
+
+def _ensure_erpnext_foundation(
+    tenant_name,
+    plan_definition,
+    registered_country=None,
+):
+    """
+    Initialize the minimum ERPNext tenant foundation required by Clinify.
+
+    This intentionally reuses ERPNext's supported setup operations while
+    avoiding the broad ERPNext fixture installer. The latter is designed for
+    the interactive setup wizard and can modify a large set of nested-set
+    master data.
+
+    This function runs inside a newly-created tenant site.
+    """
+
+    if not frappe.db.exists("DocType", "Company"):
+        frappe.throw("ERPNext Company DocType is not available.")
+
+    if not frappe.db.exists("DocType", "Fiscal Year"):
+        frappe.throw("ERPNext Fiscal Year DocType is not available.")
+
+    country = str(registered_country or "").strip()
+    if not country:
+        frappe.throw("Registered Country is required for ERPNext foundation setup.")
+
+    currency = str(
+        (plan_definition or {}).get("currency") or ""
+    ).strip().upper()
+
+    if not currency:
+        frappe.throw("Plan currency is required for ERPNext foundation setup.")
+
+    company_count = frappe.db.count("Company")
+    tenant_company_exists = frappe.db.exists(
+        "Company",
+        {"company_name": tenant_name},
+    )
+
+    # Standard UOM/UOM conversion data is intentionally installed first.
+    # add_uom_data() is idempotent and inserts only missing records.
+    erpnext_fixtures.add_uom_data()
+
+    # ERPNext Company.on_update() creates a default "Goods In Transit"
+    # warehouse with warehouse_type="Transit". Healthcare also relies on
+    # the standard "Services" Item Group. These are the minimal setup
+    # records required by the tenant foundation; avoid the broad ERPNext
+    # setup-wizard fixture installer.
+    _ensure_erpnext_foundation_fixtures()
+
+    if not tenant_company_exists:
+        current_year = now_datetime().year
+
+        setup_args = frappe._dict(
+            {
+                "currency": currency,
+                "company_name": tenant_name,
+                "company_abbr": None,
+                "country": country,
+                "domain": None,
+                "chart_of_accounts": "Standard",
+                "fy_start_date": f"{current_year}-01-01",
+                "fy_end_date": f"{current_year}-12-31",
+            }
+        )
+
+        erpnext_fixtures.install_company(setup_args)
+
+    # install_defaults() requires Company to exist because it establishes
+    # Global Defaults.default_company.
+    if not frappe.db.exists("Company", {"company_name": tenant_name}):
+        frappe.throw(
+            "ERPNext foundation initialization failed: Company was not created."
+        )
+
+    default_args = frappe._dict(
+        {
+            "currency": currency,
+            "company_name": tenant_name,
+            "country": country,
+            "domain": None,
+            "chart_of_accounts": "Standard",
+            "bank_account": None,
+        }
+    )
+
+    erpnext_fixtures.install_defaults(default_args)
+
+    company = frappe.db.get_value(
+        "Company",
+        {"company_name": tenant_name},
+        ["name", "abbr", "default_currency", "country"],
+        as_dict=True,
+    )
+
+    fiscal_year_count = frappe.db.count("Fiscal Year")
+
+    stock_uom = frappe.db.get_single_value(
+        "Stock Settings",
+        "stock_uom",
+    )
+
+    standard_buying = frappe.db.exists(
+        "Price List",
+        {"name": "Standard Buying"},
+    )
+
+    standard_selling = frappe.db.exists(
+        "Price List",
+        {"name": "Standard Selling"},
+    )
+
+    transit_type = frappe.db.exists("Warehouse Type", "Transit")
+
+    warehouse_count = frappe.db.count(
+        "Warehouse",
+        {"company": tenant_name},
+    )
+
+    expected_warehouses = (
+        frappe.db.count(
+            "Warehouse",
+            {"company": tenant_name, "warehouse_name": "All Warehouses"},
+        )
+        and frappe.db.count(
+            "Warehouse",
+            {"company": tenant_name, "warehouse_name": "Stores"},
+        )
+        and frappe.db.count(
+            "Warehouse",
+            {"company": tenant_name, "warehouse_name": "Work In Progress"},
+        )
+        and frappe.db.count(
+            "Warehouse",
+            {"company": tenant_name, "warehouse_name": "Finished Goods"},
+        )
+        and frappe.db.count(
+            "Warehouse",
+            {
+                "company": tenant_name,
+                "warehouse_name": "Goods In Transit",
+                "warehouse_type": "Transit",
+            },
+        )
+    )
+
+    services_item_group = frappe.db.exists("Item Group", "Services")
+
+    if not company:
+        frappe.throw("ERPNext foundation verification failed: Company is missing.")
+
+    if fiscal_year_count == 0:
+        frappe.throw("ERPNext foundation verification failed: Fiscal Year is missing.")
+
+    if not stock_uom:
+        frappe.throw("ERPNext foundation verification failed: Stock UOM is missing.")
+
+    if not standard_buying:
+        frappe.throw(
+            "ERPNext foundation verification failed: Standard Buying Price List is missing."
+        )
+
+    if not standard_selling:
+        frappe.throw(
+            "ERPNext foundation verification failed: Standard Selling Price List is missing."
+        )
+
+    if not transit_type:
+        frappe.throw(
+            "ERPNext foundation verification failed: Warehouse Type Transit is missing."
+        )
+
+    if not expected_warehouses:
+        frappe.throw(
+            "ERPNext foundation verification failed: Default warehouse tree is incomplete."
+        )
+
+    if not services_item_group:
+        frappe.throw(
+            "ERPNext foundation verification failed: Services Item Group is missing."
+        )
+
+    return {
+        "company": company.name,
+        "company_abbr": company.abbr,
+        "currency": company.default_currency,
+        "country": company.country,
+        "fiscal_year_count": fiscal_year_count,
+        "stock_uom": stock_uom,
+        "standard_buying": bool(standard_buying),
+        "standard_selling": bool(standard_selling),
+        "warehouse_type_transit": bool(transit_type),
+        "warehouse_count": warehouse_count,
+        "default_warehouses_complete": bool(expected_warehouses),
+        "services_item_group": bool(services_item_group),
+    }
+
+
 def _finalize_frappe_setup():
     """
     Finalize the tenant site's Frappe setup state.
 
-    This runs after the Clinify administrator has been created.
-    Frappe owns the setup-completion rules, so delegate the
-    calculation to its Installed Applications singleton.
+    Tenant provisioning does not run the interactive Frappe setup wizard,
+    so reproduce only the setup-completion state transition required by
+    Frappe after the required application stack has been installed.
     """
     frappe.get_single("Installed Applications").update_versions()
 
-    if not frappe.is_setup_complete():
-        frappe.throw(
-            "Tenant setup could not be finalized by Frappe."
+    for app_name in ("frappe", "erpnext"):
+        if not frappe.db.exists("Installed Application", {"app_name": app_name}):
+            frappe.throw(f"Required application is missing from Installed Applications: {app_name}")
+
+        frappe.db.set_value(
+            "Installed Application",
+            {"app_name": app_name},
+            "is_setup_complete",
+            1,
         )
 
+    frappe.clear_cache(doctype="System Settings")
+
+    frappe.db.set_single_value(
+        "System Settings",
+        "enable_onboarding",
+        1,
+    )
+
+    frappe.db.set_single_value(
+        "System Settings",
+        "setup_complete",
+        1,
+    )
+
+    frappe.db.commit()
+    frappe.clear_cache()
 
 
 def bootstrap_tenant(
@@ -437,9 +808,6 @@ def bootstrap_tenant(
     postal_code = _clean(postal_code)
     registered_country = _clean(registered_country)
 
-    _ensure_admin_role()
-    _ensure_admin_permissions()
-
     plan_code = _clean(plan).upper()
 
     if not plan_code:
@@ -447,6 +815,15 @@ def bootstrap_tenant(
 
     if not plan_definition:
         frappe.throw("Plan definition is required.")
+
+    _ensure_admin_role()
+    _ensure_admin_permissions()
+
+    erpnext_foundation = _ensure_erpnext_foundation(
+        tenant_name=tenant_name,
+        plan_definition=plan_definition,
+        registered_country=registered_country,
+    )
 
     plan_type = _clean(plan_definition.get("plan_type"))
 
