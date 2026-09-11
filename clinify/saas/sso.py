@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 import frappe
 import requests
+from frappe.sessions import get_csrf_token
 from frappe.utils import getdate, today
 
 
@@ -172,10 +173,21 @@ def _consume_handoff(reference):
         return _decode(assertion)
 
 
-def _handoff_page(destination, reference):
+def _handoff_page(destination, csrf_token):
     # The template also emits the browser-enforced meta equivalent.
     frappe.local.response["headers"] = {"Referrer-Policy": "no-referrer", "Cache-Control": "no-store"}
-    frappe.respond_as_web_page("Continuing to your Clinify site", "", primary_action=None, fullpage=True, template="clinify_sso_handoff", context={"handoff_destination": destination, "handoff_reference": reference})
+    context = {
+        "handoff_destination": destination,
+        "csrf_token": csrf_token,
+    }
+    frappe.respond_as_web_page(
+        "Continuing to your Clinify site",
+        "",
+        primary_action=None,
+        fullpage=True,
+        template="clinify_sso_handoff",
+        context=context,
+    )
 
 
 def on_session_creation(login_manager=None):
@@ -206,9 +218,39 @@ def begin_handoff():
             raise RuntimeError("The Clinify handoff does not belong to this session.")
         _tenant_for_handoff(payload)
         scheme = _tenant_handoff_scheme(payload["domain"])
-        _handoff_page(scheme + "://" + payload["domain"] + "/api/method/clinify.saas.sso.consume_handoff", reference)
+        handoff_url = (
+            scheme
+            + "://"
+            + payload["domain"]
+            + "/api/method/clinify.saas.sso.handoff"
+        )
+        frappe.local.response["headers"] = {
+            "Referrer-Policy": "no-referrer",
+            "Cache-Control": "no-store",
+        }
+        frappe.local.response["type"] = "redirect"
+        frappe.local.response["location"] = handoff_url + "#reference=" + reference
     except Exception as exc:
         frappe.respond_as_web_page("Clinify sign-in unavailable", str(exc), http_status_code=403)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET"])
+def handoff():
+    try:
+        csrf_token = get_csrf_token()
+        consume_url = (
+            _tenant_handoff_scheme(frappe.request.host)
+            + "://"
+            + frappe.request.host
+            + "/api/method/clinify.saas.sso.consume_handoff"
+        )
+        _handoff_page(consume_url, csrf_token)
+    except Exception as exc:
+        frappe.respond_as_web_page(
+            "Clinify sign-in unavailable",
+            str(exc),
+            http_status_code=403,
+        )
 
 
 def _validate_local_identity(result):

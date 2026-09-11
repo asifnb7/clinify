@@ -5,8 +5,37 @@
 {% block page_content %}
 <meta name="referrer" content="no-referrer">
 <form id="clinify-sso-handoff" method="post" action="{{ handoff_destination }}">
-	<input type="hidden" name="reference" value="{{ handoff_reference }}">
+    <input type="hidden" name="reference" id="clinify-sso-reference">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 </form>
-<script>document.getElementById("clinify-sso-handoff").submit();</script>
-<noscript><button form="clinify-sso-handoff" type="submit">Continue</button></noscript>
+
+<script>
+(function () {
+    const form = document.getElementById("clinify-sso-handoff");
+    const referenceField = document.getElementById("clinify-sso-reference");
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const reference = params.get("reference");
+
+    if (!reference) {
+        document.body.innerText = "Clinify sign-in unavailable: invalid handoff.";
+        return;
+    }
+
+    referenceField.value = reference;
+
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState(
+            null,
+            document.title,
+            window.location.pathname + window.location.search
+        );
+    }
+
+    form.submit();
+})();
+</script>
+
+<noscript>
+    <p>JavaScript is required to continue signing in to Clinify.</p>
+</noscript>
 {% endblock %}

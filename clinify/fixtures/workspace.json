@@ -10915,6 +10915,12 @@
     "parentfield": "roles",
     "parenttype": "Workspace",
     "role": "Physician"
+   },
+   {
+    "parent": "Healthcare",
+    "parentfield": "roles",
+    "parenttype": "Workspace",
+    "role": "Clinify Clinic Admin"
    }
   ],
   "sequence_id": 13.0,

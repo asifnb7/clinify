@@ -1,5 +1,6 @@
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -90,6 +91,40 @@ class TestClinifySso(unittest.TestCase):
         fake.db.get_value = lambda *_a, **_k: SimpleNamespace(enabled=0, user_type="System User")
         with patch.object(sso, "frappe", fake):
             with self.assertRaises(RuntimeError): sso._validate_local_identity(result)
+
+    def test_handoff_generates_csrf_protected_same_origin_post(self):
+        fake_frappe = SimpleNamespace(
+            request=SimpleNamespace(host="clinic1.salniz.com"),
+            local=SimpleNamespace(response={}),
+        )
+
+        with patch.object(sso, "frappe", fake_frappe),              patch.object(sso, "get_csrf_token", return_value="TEST-CSRF-TOKEN"),              patch.object(sso, "_tenant_handoff_scheme", return_value="https"),              patch.object(sso, "_handoff_page") as handoff_page:
+
+            sso.handoff()
+
+        handoff_page.assert_called_once_with(
+            "https://clinic1.salniz.com/api/method/clinify.saas.sso.consume_handoff",
+            "TEST-CSRF-TOKEN",
+        )
+
+    def test_handoff_template_uses_fragment_reference_and_csrf_token(self):
+        template_path = Path(
+            sso.frappe.get_app_path(
+                "clinify",
+                "www",
+                "clinify_sso_handoff.html",
+            )
+        )
+
+        content = template_path.read_text(encoding="utf-8")
+
+        self.assertIn('method="post"', content)
+        self.assertIn('name="reference"', content)
+        self.assertIn('name="csrf_token"', content)
+        self.assertIn("window.location.hash", content)
+        self.assertIn('params.get("reference")', content)
+        self.assertIn("window.history.replaceState", content)
+        self.assertIn("form.submit()", content)
 
     def test_one_time_consumption_rejects_replay(self):
         class Lock:
