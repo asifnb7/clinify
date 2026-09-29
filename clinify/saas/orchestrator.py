@@ -330,6 +330,19 @@ def provision_tenant(
             administrator_email=administrator_email,
             plan=plan,
             domain=domain,
+            # These were previously left at their empty defaults, so every
+            # value the caller supplied was discarded before the tenant record
+            # was inserted.  The tenant bootstrap needs registered_country (and
+            # the rest of the address) to build the ERPNext Company foundation.
+            contact_person=contact_person,
+            registered_phone=registered_phone,
+            registered_email=registered_email,
+            address_line_1=address_line_1,
+            address_line_2=address_line_2,
+            registered_city=registered_city,
+            registered_state=registered_state,
+            postal_code=postal_code,
+            registered_country=registered_country,
         )
 
         if _site_exists(validation["site_name"]):
