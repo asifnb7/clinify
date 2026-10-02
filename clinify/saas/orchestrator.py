@@ -17,6 +17,7 @@ BENCH_PATH = Path(frappe.get_app_path("clinify")).parents[2]
 SITES_PATH = BENCH_PATH / "sites"
 
 CLINIFY_APP = "clinify"
+TENANT_APPS = ("erpnext", "healthcare", CLINIFY_APP)
 
 
 def _set_status(tenant, status, error=None):
@@ -85,14 +86,74 @@ def _create_site(site_name, admin_password):
             db_admin_user,
             "--db-root-password",
             db_admin_password,
-            "--install-app",
-            "erpnext",
-            "--install-app",
-            "healthcare",
-            "--install-app",
-            CLINIFY_APP,
         ]
     )
+
+
+# Settings a tenant site needs in order to talk back to the control plane.
+# `bench new-site` only ever writes database credentials into the new site's
+# site_config.json (frappe.installer.make_conf) and offers no way to inject
+# anything else, so these have to be written once the site exists.  The signing
+# secret is intentionally absent: handoff signatures are verified on the control
+# site only, so a tenant must never receive it.
+TENANT_CONFIG_KEYS = (
+    "CLINIFY_CONTROL_SITE",
+    "CLINIFY_CONTROL_URL",
+    "CLINIFY_SSO_LOCAL_DEVELOPMENT",
+)
+
+LOCAL_DEVELOPMENT_KEY = "CLINIFY_SSO_LOCAL_DEVELOPMENT"
+
+
+def _tenant_config_values():
+    """Return the Clinify settings to propagate from this site to a tenant.
+
+    Only keys that are configured here are propagated, and the local
+    development waiver is copied only while it is actually enabled, so a
+    production control site can never hand an HTTP waiver to a tenant.
+    """
+    from clinify.saas.sso import _local_development_enabled, _setting
+
+    values = {}
+
+    for key in TENANT_CONFIG_KEYS:
+        value = _setting(key)
+
+        if value in (None, ""):
+            continue
+
+        if key == LOCAL_DEVELOPMENT_KEY:
+            if not _local_development_enabled():
+                continue
+            # Normalised to the literal "true": `bench set-config` stores an
+            # un-parsed value as a JSON string, and _local_development_enabled()
+            # accepts it.  Disabled is never propagated, because a string
+            # "false" would be read as truthy by a naive check.
+            value = "true"
+
+        values[key] = value
+
+    return values
+
+
+def _configure_tenant_site_config(site_name):
+    """Copy the control-plane settings of this site onto a tenant site.
+
+    Without this step a tenant has no Clinify configuration at all, which
+    leaves SSO sign-in unable to reach the control site.  Each key is written
+    through `bench set-config` so Frappe owns the locking, the path and the
+    value parsing of the tenant's own site_config.json.
+    """
+    for key, value in sorted(_tenant_config_values().items()):
+        _run_bench(
+            [
+                "--site",
+                site_name,
+                "set-config",
+                key,
+                str(value),
+            ]
+        )
 
 
 def _get_plan_definition(plan_code):
@@ -443,18 +504,23 @@ def provision_tenant(
                 "verification": verification,
             }
 
-        _set_status(tenant, "Creating Site")
+        if not _site_exists(validation["site_name"]):
+            _set_status(tenant, "Creating Site")
 
-        _create_site(
-            site_name=validation["site_name"],
-            admin_password=admin_password,
-        )
+            _create_site(
+                site_name=validation["site_name"],
+                admin_password=admin_password,
+            )
+
+        # A new site knows nothing about Clinify until this runs, because
+        # `bench new-site` cannot be given any site_config.json content beyond
+        # the database credentials it generates.  It also covers a retry whose
+        # earlier attempt died mid-install and left the directory behind.
+        # Nothing else may run against the tenant before this.
+        _configure_tenant_site_config(validation["site_name"])
 
         _set_status(tenant, "Installing Apps")
 
-        # new-site already installed the required app stack
-        # through --install-app. This status exists so the
-        # state machine remains explicit.
         installed_apps = _run_bench(
             [
                 "--site",
@@ -463,15 +529,16 @@ def provision_tenant(
             ]
         )
 
-        if CLINIFY_APP not in installed_apps:
-            _run_bench(
-                [
-                    "--site",
-                    validation["site_name"],
-                    "install-app",
-                    CLINIFY_APP,
-                ]
-            )
+        for app in TENANT_APPS:
+            if app not in installed_apps:
+                _run_bench(
+                    [
+                        "--site",
+                        validation["site_name"],
+                        "install-app",
+                        app,
+                    ]
+                )
 
         _set_status(tenant, "Configuring Clinic")
 
