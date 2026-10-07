@@ -104,6 +104,7 @@ fixtures = [
     "Property Setter",
     "Client Script",
     "Server Script",
+    "Custom HTML Block",
     {
         "doctype": "Custom DocPerm",
         "filters": [
