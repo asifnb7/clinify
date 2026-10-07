@@ -65,3 +65,51 @@ def get_drug_prescription_defaults(drug_code):
         )
 
     return result
+
+@frappe.whitelist()
+def get_medication_item_query(
+    doctype,
+    txt,
+    searchfield,
+    start,
+    page_len,
+    filters=None,
+):
+    """
+    Return only active ERPNext Items that are linked to an active Medication.
+
+    Drug Prescription uses Item as the Drug Code, but the clinical
+    workflow requires the selected Item to resolve through
+    Medication Linked Item -> Medication.
+    """
+    txt = txt or ""
+    start = int(start or 0)
+    page_len = int(page_len or 20)
+
+    like = f"%{txt}%"
+
+    return frappe.db.sql(
+        """
+        SELECT DISTINCT
+            i.name,
+            i.item_name
+        FROM `tabItem` i
+        INNER JOIN `tabMedication Linked Item` mli
+            ON mli.item = i.name
+        INNER JOIN `tabMedication` med
+            ON med.name = mli.parent
+        WHERE i.disabled = 0
+          AND med.disabled = 0
+          AND (
+              i.name LIKE %(txt)s
+              OR i.item_name LIKE %(txt)s
+          )
+        ORDER BY i.item_name, i.name
+        LIMIT %(start)s, %(page_len)s
+        """,
+        {
+            "txt": like,
+            "start": start,
+            "page_len": page_len,
+        },
+    )

@@ -31,7 +31,7 @@ SERVICES = [
         "name": "Impaction",
         "minimum": 3000,
         "maximum": 5000,
-        "basis": "Range - Root Configuration",
+        "basis": "Range",
         "requires_tooth": 1,
     },
     {
@@ -79,7 +79,7 @@ SERVICES = [
         "name": "Root Canal Treatment",
         "minimum": 3500,
         "maximum": 6000,
-        "basis": "Range - Root Configuration",
+        "basis": "Range",
         "requires_tooth": 1,
     },
     {

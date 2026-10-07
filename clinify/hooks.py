@@ -59,7 +59,10 @@ app_include_css = [
     "/assets/clinify/css/clinify_subscription_list.css",
 ]
 
-app_include_js = "/assets/clinify/js/reception_route.js"
+app_include_js = [
+    "/assets/clinify/js/reception_route.js",
+    "/assets/clinify/js/tenant_security.js",
+]
 
 
 doctype_list_js = {
@@ -69,6 +72,10 @@ doctype_list_js = {
 
 doctype_js = {
     "Patient Encounter": "public/js/encounter/clinify_encounter.js",
+    "Drug Prescription": "public/js/drug_prescription.js",
+    "Sales Invoice": "public/js/clinify_sales_invoice.js",
+    "Payment Entry": "public/js/clinify_payment_entry.js",
+    "Patient Appointment": "public/js/patient_appointment.js",
 }
 web_include_css = "/assets/clinify/css/clinify-login.css"
 
@@ -104,3 +111,53 @@ fixtures = [
         ]
     },
 ]
+
+
+after_sync = "clinify.saas.site_hooks.after_sync"
+after_migrate = "clinify.saas.site_hooks.after_migrate"
+
+# Clinify Tenant failed-provisioning retry UI
+if isinstance(app_include_js, list):
+    if "/assets/clinify/js/clinify_tenant_retry.js" not in app_include_js:
+        app_include_js.append("/assets/clinify/js/clinify_tenant_retry.js")
+else:
+    if app_include_js != "/assets/clinify/js/clinify_tenant_retry.js":
+        app_include_js = [app_include_js, "/assets/clinify/js/clinify_tenant_retry.js"]
+# CLINIFY_NATIVE_DOCTOR_SCHEDULE_HOOK
+# Extends native Healthcare Practitioner creation with Clinify's
+# tenant OPD scheduling foundation. Healthcare core is untouched.
+
+doc_events = globals().get("doc_events", {})
+
+_clinify_practitioner_events = doc_events.setdefault(
+    "Healthcare Practitioner",
+    {},
+)
+
+_clinify_schedule_handler = (
+    "clinify.doctor_schedule.ensure_default_schedule"
+)
+
+_clinify_existing_handler = _clinify_practitioner_events.get(
+    "after_insert"
+)
+
+if _clinify_existing_handler is None:
+    _clinify_practitioner_events["after_insert"] = (
+        _clinify_schedule_handler
+    )
+elif isinstance(_clinify_existing_handler, list):
+    if _clinify_schedule_handler not in _clinify_existing_handler:
+        _clinify_existing_handler.append(
+            _clinify_schedule_handler
+        )
+else:
+    if _clinify_existing_handler != _clinify_schedule_handler:
+        _clinify_practitioner_events["after_insert"] = [
+            _clinify_existing_handler,
+            _clinify_schedule_handler,
+        ]
+
+del _clinify_practitioner_events
+del _clinify_schedule_handler
+del _clinify_existing_handler

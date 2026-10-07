@@ -1,0 +1,14 @@
+{
+    "doctype": "Page",
+    "name": "saas-dashboard",
+    "module": "Clinify",
+    "page_name": "saas-dashboard",
+    "title": "SaaS Dashboard",
+    "standard": "Yes",
+    "system_page": 0,
+    "roles": [
+        {
+            "role": "System Manager"
+        }
+    ]
+}

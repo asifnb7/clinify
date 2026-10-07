@@ -1043,6 +1043,22 @@ function setup_clinify_prescription_grid(
     grid.setup_visible_columns();
 
 
+    // Clinify medication-backed Drug Code selector.
+    // Drug Prescription.drug_code remains the visible selector,
+    // but only Items linked to active Healthcare Medications
+    // may be selected.
+    frm.set_query(
+        "drug_code",
+        "drug_prescription",
+        function () {
+            return {
+                query:
+                    "clinify.api.drug_search.get_medication_item_query",
+            };
+        }
+    );
+
+
     frm.refresh_field(
         "drug_prescription"
     );
@@ -1613,6 +1629,35 @@ function update_clinify_tooth_cell(
     const row =
         grid_row.doc;
 
+    /*
+     * Frappe can recreate the grid-row DOM without recreating the
+     * child document. The tooth requirement is therefore rehydrated
+     * from the authoritative Dental Service record whenever the
+     * transient UI flag is not present.
+     */
+    if (
+        row.dental_service &&
+        typeof row.__clinify_requires_tooth === "undefined"
+    ) {
+        frappe.db.get_value(
+            "Dental Service",
+            row.dental_service,
+            "requires_tooth"
+        ).then(function(r) {
+            const values = r.message || {};
+
+            row.__clinify_requires_tooth =
+                Number(values.requires_tooth || 0) === 1 ? 1 : 0;
+
+            update_clinify_tooth_cell(
+                frm,
+                grid_row
+            );
+        });
+
+        return;
+    }
+
     const column =
         grid_row.columns &&
         grid_row.columns.tooth_area;
@@ -1640,6 +1685,10 @@ function update_clinify_tooth_cell(
 
     wrapper
         .find(".clinify-tooth-display")
+        .remove();
+
+    wrapper
+        .find(".clinify-tooth-pending")
         .remove();
 
     wrapper
@@ -1672,6 +1721,33 @@ function update_clinify_tooth_cell(
         "text-align-last": "center"
     });
 
+    if (!row.tooth_area) {
+        wrapper.append(
+            $("<span>")
+                .addClass("clinify-tooth-pending")
+                .attr(
+                    "title",
+                    __("Tooth Number Required")
+                )
+                .css({
+                    "display": "inline-block",
+                    "width": "18px",
+                    "height": "18px",
+                    "margin-right": "4px",
+                    "border-radius": "50%",
+                    "background": "#fff3cd",
+                    "border": "1px solid #d97706",
+                    "color": "#b45309",
+                    "font-size": "11px",
+                    "font-weight": "700",
+                    "line-height": "16px",
+                    "text-align": "center",
+                    "vertical-align": "middle"
+                })
+                .text("!")
+        );
+    }
+
     select.append(
         $("<option>")
             .val("")
@@ -1701,13 +1777,28 @@ function update_clinify_tooth_cell(
 
     select.on("change", function() {
 
-        row.tooth_area =
+        const tooth_area =
             $(this).val() || "";
 
-        // Keep the control alive and visible.
-        select.val(
-            row.tooth_area
+        /*
+         * Use Frappe's child-document model instead of a plain
+         * JavaScript assignment. This keeps the value in the
+         * authoritative child row and marks the form dirty.
+         */
+        frappe.model.set_value(
+            row.doctype || "Clinify Encounter Service",
+            row.name,
+            "tooth_area",
+            tooth_area
         );
+
+        frm.dirty();
+
+        if (tooth_area) {
+            wrapper
+                .find(".clinify-tooth-pending")
+                .remove();
+        }
 
     });
 
@@ -1811,6 +1902,18 @@ frappe.ui.form.on(
                         __("Please select a Dental Service for row {0}.", [
                             row.idx
                         ])
+                    );
+                }
+
+                if (
+                    typeof row.__clinify_requires_tooth ===
+                    "undefined"
+                ) {
+                    frappe.throw(
+                        __(
+                            "Dental Service information is still loading for row {0}. Please wait a moment and try again.",
+                            [row.idx]
+                        )
                     );
                 }
 

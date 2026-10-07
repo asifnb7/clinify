@@ -67,7 +67,19 @@ def _control_site():
 
 
 def _is_control_site():
-    return (frappe.local.site or "").lower() == _control_site()
+    try:
+        configured = _control_site()
+    except RuntimeError:
+        # A site without any Clinify control-plane configuration can never be
+        # the control site. This happens while a tenant is being created, since
+        # `bench new-site` writes only database credentials into the new
+        # site_config.json and the Clinify settings arrive after install.
+        # Answering "not the control site" keeps callers such as
+        # _protect_control_plane_ui() and on_session_creation() fail-safe
+        # instead of aborting a valid operation over a missing lookup.
+        return False
+
+    return bool(configured) and (frappe.local.site or "").lower() == configured
 
 
 def _tenant_domain(domain):

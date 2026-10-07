@@ -1,6 +1,8 @@
 import re
+import uuid
 
 import frappe
+from frappe.utils.password import decrypt, encrypt
 
 
 RESERVED_SITE_NAMES = {
@@ -11,6 +13,32 @@ RESERVED_SITE_NAMES = {
     "site2",
     "test",
 }
+
+
+PROVISIONING_CREDENTIAL_TTL = 900
+PROVISIONING_JOB_PREFIX = "clinify:tenant-provisioning:"
+
+
+def _credential_key(token):
+    return "{}credential:{}".format(PROVISIONING_JOB_PREFIX, token)
+
+
+def _store_provisioning_password(password):
+    token = uuid.uuid4().hex
+    frappe.cache().set_value(_credential_key(token), encrypt(password), expires_in_sec=PROVISIONING_CREDENTIAL_TTL)
+    return token
+
+
+def _consume_provisioning_password(token):
+    encrypted = frappe.cache().get_value(_credential_key(token))
+    if not encrypted:
+        frappe.throw("Provisioning credentials have expired. Please retry provisioning.")
+    frappe.cache().delete_value(_credential_key(token))
+    return decrypt(encrypted)
+
+
+def _provisioning_job_name(tenant_name):
+    return "{}{}".format(PROVISIONING_JOB_PREFIX, tenant_name)
 
 
 def _clean(value):
@@ -236,6 +264,7 @@ def provision_tenant_from_ui(
     registered_state=None,
     postal_code=None,
     registered_country=None,
+    subscription_end_date=None,
 ):
     """
     Provision a new Clinify tenant from the control-plane UI.
@@ -253,6 +282,20 @@ def provision_tenant_from_ui(
     _require_provisioning_access()
 
     administrator_password = _clean(administrator_password)
+    if not tenant_code or not site_name:
+        slug = re.sub(r"[^a-z0-9]+", "-", _clean(tenant_name).lower()).strip("-")
+        if not slug:
+            frappe.throw("A valid Clinic Name is required to generate Tenant Code and Tenant Site.")
+        tenant_code = slug.upper()[:50]
+        site_name = slug[:90] + ".localhost"
+        base_code, base_site = tenant_code, site_name
+        n = 2
+        while frappe.db.exists("Clinify Tenant", {"tenant_code": tenant_code}) or frappe.db.exists("Clinify Tenant", {"site_name": site_name}):
+            suffix = "-" + str(n)
+            tenant_code = base_code[:50-len(suffix)] + suffix
+            site_name = base_site[:100-len(suffix)-len(".localhost")] + suffix + ".localhost"
+            n += 1
+
 
     if not administrator_password:
         frappe.throw(
@@ -286,9 +329,20 @@ def provision_tenant_from_ui(
     )
 
     if existing_tenant:
-        if existing_tenant.provisioning_status != "Pending":
+        retryable_statuses = {
+            "Pending",
+            "Creating Site",
+            "Installing Apps",
+            "Configuring Clinic",
+            "Creating Subscription",
+            "Creating Administrator",
+            "Verifying",
+            "Failed",
+        }
+
+        if existing_tenant.provisioning_status not in retryable_statuses:
             frappe.throw(
-                "Tenant is not Pending and cannot be provisioned from the UI: {}".format(
+                "Tenant cannot be provisioned from the UI in its current status: {}".format(
                     existing_tenant.provisioning_status
                 )
             )
@@ -331,15 +385,25 @@ def provision_tenant_from_ui(
             registered_country=registered_country,
         )
 
-    from clinify.saas.orchestrator import provision_tenant
+    password_token = _store_provisioning_password(administrator_password)
 
-    result = provision_tenant(
+    job_id = "{}{}".format(
+        PROVISIONING_JOB_PREFIX,
+        validation["tenant_code"],
+    )
+
+    frappe.enqueue(
+        "clinify.saas.provisioning.run_queued_provisioning",
+        queue="long",
+        job_id=job_id,
+        deduplicate=True,
+        enqueue_after_commit=True,
         tenant_name=validation["tenant_name"],
         tenant_code=validation["tenant_code"],
         site_name=validation["site_name"],
         administrator_email=validation["administrator_email"],
         plan=validation["plan"],
-        admin_password=administrator_password,
+        administrator_password_token=password_token,
         administrator_name=(
             _clean(administrator_name)
             or validation["tenant_name"]
@@ -354,9 +418,69 @@ def provision_tenant_from_ui(
         registered_state=validation["registered_state"],
         postal_code=validation["postal_code"],
         registered_country=validation["registered_country"],
+        subscription_end_date=subscription_end_date,
     )
 
-    return result
+    return {
+        "success": True,
+        "queued": True,
+        "tenant": existing_tenant.name if existing_tenant else validation["tenant_name"],
+        "tenant_name": validation["tenant_name"],
+        "tenant_code": validation["tenant_code"],
+        "site_name": validation["site_name"],
+        "provisioning_status": "Queued",
+        "message": "Tenant provisioning has been queued.",
+    }
+
+
+def run_queued_provisioning(
+    tenant_name,
+    tenant_code,
+    site_name,
+    administrator_email,
+    plan,
+    administrator_password_token,
+    administrator_name=None,
+    domain=None,
+    contact_person=None,
+    registered_phone=None,
+    registered_email=None,
+    address_line_1=None,
+    address_line_2=None,
+    registered_city=None,
+    registered_state=None,
+    postal_code=None,
+    registered_country=None,
+    subscription_end_date=None,
+):
+    password = None
+    try:
+        password = _consume_provisioning_password(administrator_password_token)
+
+        from clinify.saas.orchestrator import provision_tenant
+
+        return provision_tenant(
+            tenant_name=tenant_name,
+            tenant_code=tenant_code,
+            site_name=site_name,
+            administrator_email=administrator_email,
+            plan=plan,
+            admin_password=password,
+            subscription_end_date=subscription_end_date,
+            administrator_name=administrator_name,
+            domain=domain,
+            contact_person=contact_person,
+            registered_phone=registered_phone,
+            registered_email=registered_email,
+            address_line_1=address_line_1,
+            address_line_2=address_line_2,
+            registered_city=registered_city,
+            registered_state=registered_state,
+            postal_code=postal_code,
+            registered_country=registered_country,
+        )
+    finally:
+        password = None
 
 
 @frappe.whitelist()

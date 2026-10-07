@@ -206,31 +206,31 @@ def _bootstrap_site(
     registered_state=None,
     postal_code=None,
     registered_country=None,
+    subscription_end_date=None,
 ):
     method = (
         "clinify.saas.tenant_bootstrap.bootstrap_tenant"
     )
 
-    import json
-
-    args = json.dumps(
-        [
-            tenant_name,
-            tenant_code,
-            administrator_email,
-            administrator_name,
-            plan,
-            plan_definition,
-            contact_person,
-            registered_phone,
-            registered_email,
-            address_line_1,
-            address_line_2,
-            registered_city,
-            registered_state,
-            postal_code,
-            registered_country,
-        ]
+    kwargs = repr(
+        {
+            "tenant_name": tenant_name,
+            "tenant_code": tenant_code,
+            "administrator_email": administrator_email,
+            "administrator_name": administrator_name,
+            "plan": plan,
+            "plan_definition": plan_definition,
+            "contact_person": contact_person,
+            "registered_phone": registered_phone,
+            "registered_email": registered_email,
+            "address_line_1": address_line_1,
+            "address_line_2": address_line_2,
+            "registered_city": registered_city,
+            "registered_state": registered_state,
+            "postal_code": postal_code,
+            "registered_country": registered_country,
+            "subscription_end_date": subscription_end_date,
+        }
     )
 
     _run_bench(
@@ -239,8 +239,8 @@ def _bootstrap_site(
             site_name,
             "execute",
             method,
-            "--args",
-            args,
+            "--kwargs",
+            kwargs,
         ]
     )
 
@@ -299,6 +299,7 @@ def provision_tenant(
     registered_state=None,
     postal_code=None,
     registered_country=None,
+    subscription_end_date=None,
 ):
     """
     Provision a new Clinify tenant from the control site.
@@ -343,10 +344,20 @@ def provision_tenant(
     if tenant:
         tenant = frappe.get_doc("Clinify Tenant", tenant.name)
 
-        if tenant.provisioning_status not in ("Pending", "Verifying"):
+        retryable_statuses = {
+            "Pending",
+            "Creating Site",
+            "Installing Apps",
+            "Configuring Clinic",
+            "Creating Subscription",
+            "Creating Administrator",
+            "Verifying",
+            "Failed",
+        }
+
+        if tenant.provisioning_status not in retryable_statuses:
             frappe.throw(
-                "Only a Pending or Verifying Tenant can be provisioned. "
-                "Current status: {}".format(
+                "Tenant cannot be provisioned from the UI in its current status: {}".format(
                     tenant.provisioning_status
                 )
             )
@@ -444,10 +455,12 @@ def provision_tenant(
         tenant.insert(ignore_permissions=True)
         frappe.db.commit()
 
-    if (
-        tenant.provisioning_status != "Verifying"
-        and _site_exists(validation["site_name"])
-    ):
+    site_exists = _site_exists(validation["site_name"])
+
+    # A site that already exists is a collision only for a brand-new
+    # Pending tenant. Once provisioning has started, the directory may
+    # legitimately be a partial result of an interrupted attempt.
+    if tenant.provisioning_status == "Pending" and site_exists:
         frappe.throw(
             "Site directory already exists: {}".format(
                 validation["site_name"]
@@ -570,6 +583,7 @@ def provision_tenant(
             registered_state=validation["registered_state"],
             postal_code=validation["postal_code"],
             registered_country=validation["registered_country"],
+            subscription_end_date=subscription_end_date,
         )
 
         ensure_control_site_administrator(

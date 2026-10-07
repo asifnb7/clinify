@@ -1,4 +1,12 @@
 frappe.ui.form.on("Drug Prescription", {
+    setup(frm) {
+        frm.set_query("drug_code", "drug_prescription", function () {
+            return {
+                query: "clinify.api.drug_search.get_medication_item_query",
+            };
+        });
+    },
+
     drug_code(frm, cdt, cdn) {
         const row = locals[cdt][cdn];
 

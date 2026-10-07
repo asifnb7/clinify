@@ -6,3 +6,5 @@
 # Patches added in this section will be executed after doctypes are migrated
 clinify.patches.install_core_custom_fields
 clinify.patches.reconcile_encounter_dental_metadata
+
+clinify.patches.install_clinify_prescription_print_format_v6

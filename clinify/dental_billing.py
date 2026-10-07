@@ -21,6 +21,7 @@ def _get_dental_services_from_encounter(encounter):
     ) or []
 
 
+
 def _validate_dental_service(row):
     """
     Validate one Clinify Encounter Service row.
@@ -134,6 +135,7 @@ def append_dental_items(invoice, encounter):
             "items",
             item,
         )
+
 
 
 def create_invoice_from_encounter_dental(encounter):

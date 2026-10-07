@@ -113,6 +113,44 @@ def get_matching_vitals(encounter_name):
         frappe.throw("Not permitted.", frappe.PermissionError)
 
     return _get_matching_vital_for_encounter(doc)
+
+
+@frappe.whitelist()
+def get_matching_vitals_for_print(encounter_name):
+    """
+    Return the same authoritative Vital Signs record used by
+    the Clinify Encounter UI, for the Clinify Prescription print format.
+
+    Matching priority:
+        1. Same Patient Appointment
+        2. Same Patient + Same Encounter Date
+
+    Returns None when no matching vitals exist.
+    """
+
+    require_clinify_access()
+
+    if not encounter_name:
+        return None
+
+    doc = frappe.get_doc(
+        "Patient Encounter",
+        encounter_name,
+    )
+
+    if not frappe.has_permission(
+        "Patient Encounter",
+        "read",
+        doc.name,
+    ):
+        frappe.throw(
+            "Not permitted.",
+            frappe.PermissionError,
+        )
+
+    return _get_matching_vital_for_encounter(doc)
+
+
 @frappe.whitelist()
 def get_matching_vitals_for_context(
     patient=None,

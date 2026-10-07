@@ -210,15 +210,9 @@ def _append_consultation_item(
 
     charge = doctor["consultation_charge"]
 
-    # No configured doctor fee means there is nothing to bill.
-    if charge <= 0:
-        return {
-            "added": False,
-            "free": False,
-            "rate": 0.0,
-            "doctor": doctor["practitioner_name"],
-        }
-
+    # A consultation is the base billable event.
+    # If the doctor has no configured fee, retain the consultation
+    # line at zero rather than preventing invoice creation.
     item_code = doctor["consultation_item"]
 
     if not frappe.db.exists("Item", item_code):
@@ -342,6 +336,7 @@ def create_invoice_from_dental_plan(
         fields=[
             "name",
             "dental_service",
+            "estimated_cost",
         ],
     )
 
@@ -417,11 +412,19 @@ def create_invoice_from_dental_plan(
                 f"has no ERPNext Item configured."
             )
 
+        rate = float(row.estimated_cost or 0)
+
+        if rate <= 0:
+            frappe.throw(
+                f"Dental Planned Procedure {row.name} has no valid estimated cost. Dental services cannot be billed at zero."
+            )
+
         invoice.append(
             "items",
             {
                 "item_code": service.erpnext_item,
                 "qty": 1,
+                "rate": rate,
                 "description": service.service_name,
             },
         )

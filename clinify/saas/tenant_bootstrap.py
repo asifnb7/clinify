@@ -2,6 +2,7 @@ import frappe
 from frappe.utils import add_to_date, now_datetime, today
 
 from erpnext.setup.setup_wizard.operations import install_fixtures as erpnext_fixtures
+from frappe.utils.fixtures import sync_fixtures
 
 from clinify.saas.provisioning import (
     _clean,
@@ -45,6 +46,108 @@ ADMIN_PERMISSIONS = {
     "Patient Encounter": {
         "read": 1, "write": 1, "create": 1, "delete": 0,
         "submit": 1, "cancel": 1, "amend": 1,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Vital Signs": {
+        "read": 1, "write": 1, "create": 1, "delete": 1,
+        "submit": 1, "cancel": 1, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Clinical Procedure Template": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Lab Test Template": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Observation Template": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Medication": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Dosage Form": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Prescription Dosage": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Prescription Duration": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "UOM": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Patient Care Type": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Therapy Plan": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Therapy Type": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Complaint": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Diagnosis": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Code System": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Code Value": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 1, "export": 1, "print": 1,
+        "email": 1, "share": 1,
+    },
+    "Inpatient Record": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
         "report": 1, "export": 1, "print": 1,
         "email": 1, "share": 1,
     },
@@ -106,6 +209,26 @@ ADMIN_PERMISSIONS = {
         "read": 1, "write": 1, "create": 1, "delete": 1,
         "submit": 0, "cancel": 0, "amend": 0,
     },
+    "Appointment Type": {
+        "read": 1, "write": 1, "create": 1, "delete": 1,
+        "submit": 0, "cancel": 0, "amend": 0,
+    },
+    "Medical Department": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+    },
+    "Healthcare Settings": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+    },
+    "Practitioner Schedule": {
+        "read": 1, "write": 1, "create": 1, "delete": 1,
+        "submit": 0, "cancel": 0, "amend": 0,
+    },
+    "Healthcare Service Unit": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+    },
 }
 
 
@@ -139,8 +262,25 @@ def _ensure_admin_permissions():
         if not frappe.db.exists("DocType", doctype):
             continue
 
+        # If a DocType has any Custom DocPerm records, Frappe uses
+        # those records instead of the standard DocType permissions.
+        # Preserve that permission model and add/update Clinic Admin
+        # as a Custom DocPerm without modifying other roles.
+        has_custom_permissions = frappe.db.exists(
+            "Custom DocPerm",
+            {
+                "parent": doctype,
+            },
+        )
+
+        permission_doctype = (
+            "Custom DocPerm"
+            if has_custom_permissions
+            else "DocPerm"
+        )
+
         existing = frappe.db.exists(
-            "DocPerm",
+            permission_doctype,
             {
                 "parent": doctype,
                 "role": CLINIFY_ADMIN_ROLE,
@@ -149,7 +289,7 @@ def _ensure_admin_permissions():
         )
 
         if existing:
-            docperm = frappe.get_doc("DocPerm", existing)
+            docperm = frappe.get_doc(permission_doctype, existing)
 
             for field, value in permissions.items():
                 setattr(docperm, field, value)
@@ -157,17 +297,36 @@ def _ensure_admin_permissions():
             docperm.save(ignore_permissions=True)
             continue
 
-        docperm = frappe.get_doc({
-            "doctype": "DocPerm",
+        docperm_data = {
+            "doctype": permission_doctype,
             "parent": doctype,
-            "parenttype": "DocType",
-            "parentfield": "permissions",
             "role": CLINIFY_ADMIN_ROLE,
             "permlevel": 0,
             **permissions,
-        })
+        }
 
+        if permission_doctype == "DocPerm":
+            docperm_data.update({
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+            })
+
+        docperm = frappe.get_doc(docperm_data)
         docperm.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+def _ensure_gender_master_data():
+    """Ensure the standard gender masters required by Healthcare are available."""
+    if not frappe.db.exists("DocType", "Gender"):
+        return
+
+    for gender in ("MALE", "FEMALE"):
+        if not frappe.db.exists("Gender", gender):
+            frappe.get_doc({
+                "doctype": "Gender",
+                "gender": gender,
+            }).insert(ignore_permissions=True)
 
     frappe.db.commit()
 
@@ -186,6 +345,7 @@ def _ensure_clinic_configuration(
     registered_state=None,
     postal_code=None,
     registered_country=None,
+    subscription_end_date=None,
 ):
     clinic = frappe.get_single("Clinic Configuration")
 
@@ -275,7 +435,7 @@ def _ensure_plan(plan_definition):
     return plan
 
 
-def _ensure_subscription(clinic, plan_code):
+def _ensure_subscription(clinic, plan_code, subscription_end_date=None):
     plan_code = _clean(plan_code).upper()
 
     if not plan_code:
@@ -338,17 +498,23 @@ def _ensure_subscription(clinic, plan_code):
     billing_cycle = _clean(plan.billing_cycle)
 
     if billing_cycle == "Monthly":
-        end_date = add_to_date(start_date, months=1, days=-1)
+        calculated_end_date = add_to_date(start_date, months=1, days=-1)
     elif billing_cycle == "Quarterly":
-        end_date = add_to_date(start_date, months=3, days=-1)
+        calculated_end_date = add_to_date(start_date, months=3, days=-1)
     elif billing_cycle == "Yearly":
-        end_date = add_to_date(start_date, years=1, days=-1)
+        calculated_end_date = add_to_date(start_date, years=1, days=-1)
     else:
         frappe.throw(
             "Unsupported billing cycle: {}".format(
                 billing_cycle
             )
         )
+
+    if subscription_end_date:
+        subscription_end_date = frappe.utils.getdate(subscription_end_date)
+    end_date = subscription_end_date or calculated_end_date
+    if end_date < start_date:
+        frappe.throw("Subscription end date cannot be before the subscription start date.")
 
     subscription = frappe.get_doc({
         "doctype": "Clinify Subscription",
@@ -649,6 +815,11 @@ def _ensure_erpnext_foundation(
 
         erpnext_fixtures.install_company(setup_args)
 
+    # Synchronize Clinify's registered fixtures into the new tenant.
+    # This applies Clinify Custom Fields, Property Setters, Client Scripts,
+    # Server Scripts, Workspace records, and other registered fixtures.
+    sync_fixtures("clinify")
+
     # install_defaults() requires Company to exist because it establishes
     # Global Defaults.default_company.
     if not frappe.db.exists("Company", {"company_name": tenant_name}):
@@ -818,6 +989,202 @@ def _finalize_frappe_setup():
     frappe.clear_cache()
 
 
+
+def _ensure_healthcare_dental_foundation():
+    """Ensure the minimum Clinify dental scheduling foundation exists."""
+
+    # -------------------------------------------------
+    # Medical Department
+    # -------------------------------------------------
+    if frappe.db.exists("DocType", "Medical Department"):
+        if not frappe.db.exists("Medical Department", "Dental"):
+            frappe.get_doc({
+                "doctype": "Medical Department",
+                "department": "Dental",
+            }).insert(ignore_permissions=True)
+
+    # -------------------------------------------------
+    # Appointment Type
+    # -------------------------------------------------
+    if frappe.db.exists("DocType", "Appointment Type"):
+        if not frappe.db.exists("Appointment Type", "OPD"):
+            appointment_type = frappe.get_doc({
+                "doctype": "Appointment Type",
+                "appointment_type": "OPD",
+                "allow_booking_for": "Practitioner",
+                "default_duration": 20,
+            })
+
+            price_list = frappe.db.get_value(
+                "Price List",
+                {"selling": 1},
+                "name",
+            )
+            if price_list:
+                appointment_type.price_list = price_list
+
+            appointment_type.insert(ignore_permissions=True)
+
+    # -------------------------------------------------
+    # Healthcare Service Unit Type
+    # -------------------------------------------------
+    service_unit_type = None
+
+    if frappe.db.exists("DocType", "Healthcare Service Unit Type"):
+        service_unit_type = frappe.db.exists(
+            "Healthcare Service Unit Type",
+            "OPD",
+        )
+
+        if not service_unit_type:
+            service_unit_type_doc = frappe.get_doc({
+                "doctype": "Healthcare Service Unit Type",
+                "service_unit_type": "OPD",
+                "allow_appointments": 1,
+                "overlap_appointments": 0,
+            })
+            service_unit_type_doc.insert(ignore_permissions=True)
+            service_unit_type = service_unit_type_doc.name
+        else:
+            service_unit_type_doc = frappe.get_doc(
+                "Healthcare Service Unit Type",
+                service_unit_type,
+            )
+            service_unit_type_doc.allow_appointments = 1
+            service_unit_type_doc.save(ignore_permissions=True)
+
+    # -------------------------------------------------
+    # Healthcare Service Unit
+    # -------------------------------------------------
+    if (
+        service_unit_type
+        and frappe.db.exists("DocType", "Healthcare Service Unit")
+    ):
+        company = frappe.defaults.get_user_default("Company")
+        if not company:
+            company = frappe.db.get_value(
+                "Company",
+                {"is_group": 0},
+                "name",
+            )
+
+        existing_service_unit = frappe.db.exists(
+            "Healthcare Service Unit",
+            {
+                "healthcare_service_unit_name": "OPD",
+                "company": company,
+            },
+        )
+
+        if not existing_service_unit:
+            service_unit = frappe.get_doc({
+                "doctype": "Healthcare Service Unit",
+                "healthcare_service_unit_name": "OPD",
+                "is_group": 0,
+                "service_unit_type": service_unit_type,
+                "service_unit_capacity": 1,
+                "allow_appointments": 1,
+                "overlap_appointments": 0,
+            })
+            if not company:
+                company = frappe.db.get_value(
+                    "Company",
+                    {"is_group": 0},
+                    "name",
+                )
+
+            if company:
+                service_unit.company = company
+
+            service_unit.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+def _ensure_clinify_catalogue():
+    """
+    Ensure the minimum Clinify clinical catalogue exists in a tenant.
+
+    This is intentionally idempotent and reuses Clinify's existing
+    catalogue importers/installers rather than duplicating catalogue data.
+    """
+
+    # -------------------------------------------------
+    # Required ERPNext Item Groups
+    # -------------------------------------------------
+
+    if frappe.db.exists("DocType", "Item Group"):
+
+        if not frappe.db.exists("Item Group", "Services"):
+            frappe.get_doc(
+                {
+                    "doctype": "Item Group",
+                    "item_group_name": "Services",
+                    "parent_item_group": "All Item Groups",
+                    "is_group": 0,
+                }
+            ).insert(ignore_permissions=True)
+
+        if not frappe.db.exists("Item Group", "Dental"):
+            frappe.get_doc(
+                {
+                    "doctype": "Item Group",
+                    "item_group_name": "Dental",
+                    "parent_item_group": "All Item Groups",
+                    "is_group": 0,
+                }
+            ).insert(ignore_permissions=True)
+
+    # -------------------------------------------------
+    # Consultation Item
+    # -------------------------------------------------
+
+    if not frappe.db.exists("Item", "CONSULTATION"):
+        item = frappe.get_doc(
+            {
+                "doctype": "Item",
+                "item_code": "CONSULTATION",
+                "item_name": "Doctor Consultation",
+                "item_group": "Services",
+                "is_stock_item": 0,
+                "is_sales_item": 1,
+                "disabled": 0,
+            }
+        )
+        item.insert(ignore_permissions=True)
+
+    # -------------------------------------------------
+    # Common Medicines
+    # -------------------------------------------------
+
+    from clinify.importers.drug_importer import (
+        import_common_medicines,
+    )
+
+    import_common_medicines()
+
+    # -------------------------------------------------
+    # Lab Test Templates
+    # -------------------------------------------------
+
+    from clinify.patches.create_lab_test_template_dev import (
+        execute as install_lab_test_templates,
+    )
+
+    install_lab_test_templates()
+
+    # -------------------------------------------------
+    # Dental Catalogue
+    # -------------------------------------------------
+
+    from clinify.dev.dental_catalogue import (
+        install as install_dental_catalogue,
+    )
+
+    install_dental_catalogue()
+
+    frappe.db.commit()
+
 def bootstrap_tenant(
     tenant_name,
     tenant_code,
@@ -834,6 +1201,7 @@ def bootstrap_tenant(
     registered_state=None,
     postal_code=None,
     registered_country=None,
+    subscription_end_date=None,
 ):
     """
     Bootstrap a newly-created Clinify tenant site.
@@ -874,12 +1242,28 @@ def bootstrap_tenant(
 
     _ensure_admin_role()
     _ensure_admin_permissions()
+    _ensure_gender_master_data()
 
     erpnext_foundation = _ensure_erpnext_foundation(
         tenant_name=tenant_name,
         plan_definition=plan_definition,
         registered_country=registered_country,
     )
+
+    _ensure_healthcare_dental_foundation()
+    _ensure_clinify_catalogue()
+
+    # Install Clinify's authoritative print formats for every new tenant.
+    # The installers are idempotent and own the approved print templates.
+    from clinify.patches.install_clinify_prescription_print_format_v6 import (
+        execute as install_clinify_prescription_print_format,
+    )
+    from clinify.patches.install_clinify_invoice_print_format_v1 import (
+        execute as install_clinify_invoice_print_format,
+    )
+
+    install_clinify_prescription_print_format()
+    install_clinify_invoice_print_format()
 
     plan_type = _clean(plan_definition.get("plan_type"))
 

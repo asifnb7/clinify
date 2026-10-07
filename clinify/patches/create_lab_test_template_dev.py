@@ -8,8 +8,14 @@ def create_or_update(
     department,
     rate,
 ):
-    if frappe.db.exists("Lab Test Template", name):
-        print("Already exists:", name)
+    if (
+        frappe.db.exists("Lab Test Template", name)
+        or frappe.db.exists(
+            "Lab Test Template",
+            {"lab_test_code": lab_test_code},
+        )
+    ):
+        print("Already exists:", name, "| Code:", lab_test_code)
         return
 
     doc = frappe.get_doc({
