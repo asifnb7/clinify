@@ -290,11 +290,15 @@ def _ensure_admin_permissions():
 
         if existing:
             docperm = frappe.get_doc(permission_doctype, existing)
+            changed = False
 
             for field, value in permissions.items():
-                setattr(docperm, field, value)
+                if getattr(docperm, field) != value:
+                    setattr(docperm, field, value)
+                    changed = True
 
-            docperm.save(ignore_permissions=True)
+            if changed:
+                docperm.save(ignore_permissions=True)
             continue
 
         docperm_data = {
@@ -1050,8 +1054,9 @@ def _ensure_healthcare_dental_foundation():
                 "Healthcare Service Unit Type",
                 service_unit_type,
             )
-            service_unit_type_doc.allow_appointments = 1
-            service_unit_type_doc.save(ignore_permissions=True)
+            if not service_unit_type_doc.allow_appointments:
+                service_unit_type_doc.allow_appointments = 1
+                service_unit_type_doc.save(ignore_permissions=True)
 
     # -------------------------------------------------
     # Healthcare Service Unit
@@ -1099,6 +1104,44 @@ def _ensure_healthcare_dental_foundation():
             service_unit.insert(ignore_permissions=True)
 
     frappe.db.commit()
+
+
+def reconcile_tenant_foundation():
+    """Repair only Clinify-owned administrator and Healthcare foundation state.
+
+    Invoke explicitly with ``bench --site <tenant> execute``. This is not a
+    substitute for full provisioning and deliberately does not touch tenant
+    users, subscriptions, catalogue data, or clinical/financial documents.
+    """
+    frappe.only_for("System Manager")
+
+    site_name = (frappe.local.site or "").strip().lower()
+    control_site = (
+        frappe.conf.get("clinify_control_site") or "clinify.localhost"
+    ).strip().lower()
+
+    from clinify.saas.sso import _is_control_site
+
+    if site_name == control_site or _is_control_site():
+        frappe.throw("Tenant foundation reconciliation cannot run on the control site.")
+
+    _ensure_admin_role()
+    _ensure_admin_permissions()
+    _ensure_gender_master_data()
+    _ensure_healthcare_dental_foundation()
+
+    frappe.clear_cache()
+
+    return {
+        "success": True,
+        "site": site_name,
+        "reconciled": [
+            "Clinify Clinic Admin role",
+            "Clinify Clinic Admin permissions",
+            "Gender master data",
+            "Healthcare and Dental foundation",
+        ],
+    }
 
 
 def _ensure_clinify_catalogue():
