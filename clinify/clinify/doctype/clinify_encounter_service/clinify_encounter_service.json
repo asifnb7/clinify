@@ -7,6 +7,8 @@
  "engine": "InnoDB",
  "field_order": [
   "dental_service",
+  "tenant_dental_service",
+  "selected_price_option",
   "tooth_area",
   "qty",
   "remarks"
@@ -17,8 +19,20 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Dental Service",
-   "options": "Dental Service",
-   "reqd": 1
+   "options": "Dental Service"
+  },
+  {
+   "depends_on": "eval:!doc.dental_service",
+   "fieldname": "tenant_dental_service",
+   "fieldtype": "Link",
+   "label": "Tenant Dental Service (Custom)",
+   "options": "Clinify Tenant Dental Service"
+  },
+  {
+   "fieldname": "selected_price_option",
+   "fieldtype": "Link",
+   "label": "Selected Price Option",
+   "options": "Clinify Tenant Dental Price Option"
   },
   {
    "fieldname": "remarks",

@@ -1,6 +1,9 @@
 import unittest
 from unittest.mock import patch
 
+from clinify.medicine_catalogue_sync import (
+    EnvironmentTenantSyncCredentialProvider,
+)
 from clinify.saas import orchestrator, sso
 
 
@@ -9,6 +12,7 @@ SITE = "acme.localhost"
 CONTROL_SETTINGS = {
     "CLINIFY_CONTROL_SITE": "clinify.localhost",
     "CLINIFY_CONTROL_URL": "https://control.salniz.com",
+    "CLINIFY_CATALOGUE_SYNC_USER": "clinify-catalogue-sync@example.invalid",
     "CLINIFY_SSO_SECRET": "never-propagated",
 }
 
@@ -53,6 +57,13 @@ class TestTenantConfigPropagation(unittest.TestCase):
         self.assertEqual(
             calls,
             [
+                [
+                    "--site",
+                    SITE,
+                    "set-config",
+                    "CLINIFY_CATALOGUE_SYNC_USER",
+                    "clinify-catalogue-sync@example.invalid",
+                ],
                 ["--site", SITE, "set-config", "CLINIFY_CONTROL_SITE", "clinify.localhost"],
                 ["--site", SITE, "set-config", "CLINIFY_CONTROL_URL", "https://control.salniz.com"],
             ],
@@ -70,7 +81,39 @@ class TestTenantConfigPropagation(unittest.TestCase):
         keys = [call[3] for call in calls]
 
         self.assertNotIn("CLINIFY_SSO_SECRET", keys)
+        self.assertNotIn("CLINIFY_TENANT_ACME_LOCALHOST_SYNC_API_SECRET", keys)
         self.assertNotIn("never-propagated", [call[-1] for call in calls])
+
+    def test_catalogue_sync_username_is_propagated_but_not_credential_values(self):
+        calls = []
+        settings = control_setting()
+        credential_prefix = EnvironmentTenantSyncCredentialProvider._prefix(SITE)
+        settings_values = {
+            "CLINIFY_CATALOGUE_SYNC_USER": "catalogue-sync@example.invalid",
+            f"{credential_prefix}_API_KEY": "api-key-secret",
+            f"{credential_prefix}_API_SECRET": "tenant-api-secret",
+        }
+        setting = lambda key: settings_values.get(key) or settings(key)
+
+        with patch.object(sso, "_setting", side_effect=setting), patch.object(
+            orchestrator,
+            "_run_bench",
+            side_effect=calls.append,
+        ):
+            orchestrator._configure_tenant_site_config(SITE)
+
+        self.assertIn(
+            [
+                "--site",
+                SITE,
+                "set-config",
+                "CLINIFY_CATALOGUE_SYNC_USER",
+                "catalogue-sync@example.invalid",
+            ],
+            calls,
+        )
+        self.assertNotIn("api-key-secret", str(calls))
+        self.assertNotIn("tenant-api-secret", str(calls))
 
     def test_local_development_waiver_is_copied_only_while_enabled(self):
         enabled, disabled = [], []

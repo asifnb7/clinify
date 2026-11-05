@@ -1,4 +1,8 @@
 import frappe
+from clinify.medicine_catalogue import (
+    item_medication_identity_issue,
+    validate_medicine_source_batch,
+)
 
 
 def get_or_create_medication_class(class_name):
@@ -65,24 +69,38 @@ def get_or_create_medication(
     check whether a Medication with the generated name already exists.
     """
 
-    # First check by document name.
-    # This handles existing medicines such as "Paracetamol".
-    if frappe.db.exists("Medication", generic_name):
-        return frappe.get_doc("Medication", generic_name)
-
-    # Then check for an existing medication with the same details.
     existing = frappe.db.exists(
         "Medication",
         {
             "generic_name": generic_name,
-            "strength": strength,
-            "strength_uom": strength_uom,
-            "dosage_form": dosage_form,
         },
     )
 
     if existing:
-        return frappe.get_doc("Medication", existing)
+        medication = frappe.get_doc("Medication", existing)
+        mismatches = []
+        for field, requested in (
+            ("strength", strength),
+            ("strength_uom", strength_uom),
+            ("dosage_form", dosage_form),
+        ):
+            actual = getattr(medication, field, None)
+            if field == "strength":
+                try:
+                    matches = float(actual) == float(requested)
+                except (TypeError, ValueError):
+                    matches = False
+            else:
+                matches = str(actual or "").strip().casefold() == str(requested).strip().casefold()
+            if not matches:
+                mismatches.append(f"{field}: existing={actual!r}, requested={requested!r}")
+
+        if mismatches:
+            frappe.throw(
+                f"Medication '{generic_name}' already exists with a different clinical identity "
+                f"({'; '.join(mismatches)}). Manual review or a schema migration is required."
+            )
+        return medication
 
     doc = frappe.get_doc(
         {
@@ -111,12 +129,15 @@ def link_medication_item(
     """
 
     med = frappe.get_doc("Medication", medication)
+    item_doc = frappe.get_doc("Item", item)
+
+    identity_issue = item_medication_identity_issue(item_doc.item_name, med)
+    if identity_issue:
+        frappe.throw(identity_issue)
 
     for row in med.linked_items:
         if row.item == item:
             return med
-
-    item_doc = frappe.get_doc("Item", item)
 
     med.append(
         "linked_items",
@@ -409,6 +430,11 @@ def import_common_medicines():
     One Medication document is maintained per generic medicine.
     Multiple ERPNext Items can be linked to the same Medication.
     """
+
+    try:
+        validate_medicine_source_batch(COMMON_MEDICINES)
+    except ValueError as error:
+        frappe.throw(str(error))
 
     created_items = 0
     created_medications = 0

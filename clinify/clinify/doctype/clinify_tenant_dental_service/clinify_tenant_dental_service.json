@@ -1,0 +1,208 @@
+{
+  "actions": [],
+  "allow_import": 0,
+  "allow_rename": 0,
+  "creation": "2026-10-11 00:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "service_identity_section",
+    "service_type",
+    "dental_service",
+    "custom_service_name",
+    "custom_description",
+    "tenant_scope_section",
+    "clinic_code",
+    "billing_section",
+    "erpnext_item",
+    "default_qty",
+    "requires_tooth",
+    "pricing_basis",
+    "pricing_section",
+    "pricing_type",
+    "fixed_price",
+    "price_options",
+    "state_section",
+    "is_enabled",
+    "is_active"
+  ],
+  "fields": [
+    {
+      "fieldname": "service_identity_section",
+      "fieldtype": "Section Break",
+      "label": "Service Identity"
+    },
+    {
+      "default": "Standard",
+      "fieldname": "service_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Service Type",
+      "options": "Standard\nCustom",
+      "reqd": 1,
+      "set_only_once": 1
+    },
+    {
+      "depends_on": "eval:doc.service_type==\"Standard\"",
+      "fieldname": "dental_service",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Standard Dental Service",
+      "options": "Dental Service",
+      "set_only_once": 1
+    },
+    {
+      "depends_on": "eval:doc.service_type==\"Custom\"",
+      "fieldname": "custom_service_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Custom Service Name"
+    },
+    {
+      "depends_on": "eval:doc.service_type==\"Custom\"",
+      "fieldname": "custom_description",
+      "fieldtype": "Small Text",
+      "label": "Custom Service Description"
+    },
+    {
+      "fieldname": "tenant_scope_section",
+      "fieldtype": "Section Break",
+      "label": "Tenant Scope"
+    },
+    {
+      "fieldname": "clinic_code",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Clinic Code",
+      "read_only": 1
+    },
+    {
+      "fieldname": "billing_section",
+      "fieldtype": "Section Break",
+      "label": "Billing Configuration"
+    },
+    {
+      "fieldname": "erpnext_item",
+      "fieldtype": "Link",
+      "label": "ERPNext Item",
+      "options": "Item"
+    },
+    {
+      "default": "1",
+      "fieldname": "default_qty",
+      "fieldtype": "Int",
+      "label": "Default Quantity"
+    },
+    {
+      "default": "0",
+      "fieldname": "requires_tooth",
+      "fieldtype": "Check",
+      "label": "Requires Tooth"
+    },
+    {
+      "fieldname": "pricing_basis",
+      "fieldtype": "Select",
+      "label": "Pricing Basis (Reference)",
+      "options": "Fixed\nRange\nPer Tooth\nPer Cap\nPer Arch",
+      "read_only": 1
+    },
+    {
+      "fieldname": "pricing_section",
+      "fieldtype": "Section Break",
+      "label": "Tenant Pricing"
+    },
+    {
+      "default": "Fixed",
+      "fieldname": "pricing_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Pricing Type",
+      "options": "Fixed\nVariable",
+      "reqd": 1
+    },
+    {
+      "depends_on": "eval:doc.pricing_type==\"Fixed\"",
+      "fieldname": "fixed_price",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Fixed Selling Price"
+    },
+    {
+      "depends_on": "eval:doc.pricing_type==\"Variable\"",
+      "fieldname": "price_options",
+      "fieldtype": "Table",
+      "label": "Variable Price Options",
+      "options": "Clinify Tenant Dental Price Option"
+    },
+    {
+      "fieldname": "state_section",
+      "fieldtype": "Section Break",
+      "label": "State"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Enabled"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Active"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-10-11 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Clinify",
+  "name": "Clinify Tenant Dental Service",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Clinify Clinic Admin",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "read": 1,
+      "role": "Physician"
+    }
+  ],
+  "row_format": "Dynamic",
+  "rows_threshold_for_grid_search": 20,
+  "search_fields": "service_type,custom_service_name,clinic_code",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

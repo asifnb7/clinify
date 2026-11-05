@@ -71,12 +71,15 @@ doctype_list_js = {
 }
 
 doctype_js = {
-    "Patient Encounter": "public/js/encounter/clinify_encounter.js",
-    "Drug Prescription": "public/js/drug_prescription.js",
+    "Patient Encounter": [
+        "public/js/encounter/clinify_encounter.js",
+        "public/js/drug_prescription.js",
+    ],
     "Sales Invoice": "public/js/clinify_sales_invoice.js",
     "Payment Entry": "public/js/clinify_payment_entry.js",
     "Patient Appointment": "public/js/patient_appointment.js",
 }
+
 web_include_css = "/assets/clinify/css/clinify-login.css"
 
 doc_events = {
@@ -105,6 +108,10 @@ fixtures = [
     "Client Script",
     "Server Script",
     "Custom HTML Block",
+    {
+        "doctype": "Role",
+        "filters": [["name", "=", "Clinify Catalogue Sync"]],
+    },
     {
         "doctype": "Custom DocPerm",
         "filters": [

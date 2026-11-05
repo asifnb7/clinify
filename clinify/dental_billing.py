@@ -2,6 +2,15 @@ import frappe
 from frappe import _
 from frappe.utils import flt, today
 
+from clinify.tenant_dental_config import (
+    CONFIG_DOCTYPE,
+    SERVICE_TYPE_CUSTOM,
+    DentalPriceResolutionError,
+    get_current_clinic_code,
+    resolve_tenant_dental_price,
+    tenant_config_for_standard_service,
+)
+
 
 def _get_dental_services_from_encounter(encounter):
     """
@@ -22,88 +31,149 @@ def _get_dental_services_from_encounter(encounter):
 
 
 
-def _validate_dental_service(row):
-    """
-    Validate one Clinify Encounter Service row.
-
-    Returns:
-        (Dental Service document, quantity)
-    """
-
-    if not row.dental_service:
-        frappe.throw(
-            _("Dental Service is required for each dental service row.")
-        )
-
-    if not frappe.db.exists(
+def _config_display_name(config):
+    """Human-readable name for a tenant dental service configuration."""
+    if config.service_type == SERVICE_TYPE_CUSTOM:
+        return config.custom_service_name or config.name
+    central_name = frappe.db.get_value(
         "Dental Service",
-        row.dental_service,
-    ):
-        frappe.throw(
-            _("Dental Service '{0}' does not exist.").format(
-                row.dental_service
-            )
-        )
-
-    service = frappe.get_doc(
-        "Dental Service",
-        row.dental_service,
+        config.dental_service,
+        "service_name",
     )
+    return central_name or config.dental_service or config.name
 
-    if not service.is_active:
+
+def _resolve_tenant_config(row):
+    """
+    Resolve the tenant-owned configuration for one encounter service row.
+
+    Standard services are resolved through the central catalogue link;
+    custom services are referenced directly by their tenant configuration.
+    A server-side tenant isolation guard rejects any configuration whose
+    clinic code does not match the current tenant.
+    """
+
+    config_name = getattr(row, "tenant_dental_service", None)
+
+    if config_name:
+        if not frappe.db.exists(CONFIG_DOCTYPE, config_name):
+            frappe.throw(
+                _("Dental service configuration '{0}' does not exist.").format(
+                    config_name
+                )
+            )
+        config = frappe.get_doc(CONFIG_DOCTYPE, config_name)
+    else:
+        if not row.dental_service:
+            frappe.throw(
+                _("Dental Service is required for each dental service row.")
+            )
+        config = tenant_config_for_standard_service(row.dental_service)
+        if config is None:
+            frappe.throw(
+                _(
+                    "Dental Service '{0}' is not configured for this clinic."
+                ).format(row.dental_service)
+            )
+
+    # Defense-in-depth tenant isolation. The per-site architecture already
+    # isolates tenants; this explicit guard never trusts UI alone and fails
+    # closed when the current tenant's clinic identity cannot be established.
+    current_clinic_code = get_current_clinic_code()
+    if not current_clinic_code:
         frappe.throw(
-            _("Dental Service '{0}' is inactive.").format(
-                service.service_name or service.name
+            _(
+                "Tenant clinic identity is not configured; refusing to "
+                "resolve dental pricing."
             )
         )
 
-    if not service.erpnext_item:
+    if config.clinic_code and config.clinic_code != current_clinic_code:
         frappe.throw(
-            _(
-                "Dental Service '{0}' has no ERPNext Item configured."
-            ).format(
-                service.service_name or service.name
-            )
+            _("This dental service belongs to another clinic.")
         )
 
-    if not frappe.db.exists(
-        "Item",
-        service.erpnext_item,
-    ):
+    return config
+
+
+def _resolve_item_and_qty(row, config):
+    """Validate the billable item and resolve a positive quantity."""
+
+    # Standard services keep their central-catalogue validation.
+    if config.service_type != SERVICE_TYPE_CUSTOM:
+        if not frappe.db.exists("Dental Service", config.dental_service):
+            frappe.throw(
+                _("Dental Service '{0}' does not exist.").format(
+                    config.dental_service
+                )
+            )
+        central = frappe.get_doc("Dental Service", config.dental_service)
+        if not central.is_active:
+            frappe.throw(
+                _("Dental Service '{0}' is inactive.").format(
+                    central.service_name or central.name
+                )
+            )
+
+    if not config.erpnext_item:
         frappe.throw(
             _(
-                "ERPNext Item '{0}' configured for Dental Service "
-                "'{1}' does not exist."
+                "Dental service '{0}' has no ERPNext Item configured."
+            ).format(_config_display_name(config))
+        )
+
+    if not frappe.db.exists("Item", config.erpnext_item):
+        frappe.throw(
+            _(
+                "ERPNext Item '{0}' configured for dental service '{1}' "
+                "does not exist."
             ).format(
-                service.erpnext_item,
-                service.service_name or service.name,
+                config.erpnext_item,
+                _config_display_name(config),
             )
         )
 
     qty = flt(row.qty)
 
     if qty <= 0:
-        qty = flt(service.default_qty) or 1
+        qty = flt(config.default_qty) or 1
 
     if qty <= 0:
         frappe.throw(
             _(
-                "Quantity must be greater than zero for Dental Service '{0}'."
-            ).format(
-                service.service_name or service.name
-            )
+                "Quantity must be greater than zero for dental service '{0}'."
+            ).format(_config_display_name(config))
         )
 
-    if service.requires_tooth and not row.tooth_area:
+    if config.requires_tooth and not row.tooth_area:
         frappe.throw(
             _(
-                "Tooth Area is required for Dental Service '{0}'."
-            ).format(
-                service.service_name or service.name
-            )
+                "Tooth / Area is required for dental service '{0}'."
+            ).format(_config_display_name(config))
         )
 
-    return service, qty
+    return qty
+
+
+def _resolve_price(row, config):
+    """
+    Resolve the tenant selling rate for the row.
+
+    Never silently returns zero and never falls back to the central
+    minimum/maximum price or another tenant's price. A missing or invalid
+    tenant price stops billing with a clear validation error.
+    """
+
+    selected_option = getattr(row, "selected_price_option", None)
+
+    try:
+        return resolve_tenant_dental_price(
+            config.as_dict(),
+            selected_option,
+        )
+    except DentalPriceResolutionError as error:
+        frappe.throw(str(error))
+
 
 
 def append_dental_items(invoice, encounter):
@@ -118,14 +188,18 @@ def append_dental_items(invoice, encounter):
 
     for row in rows:
 
-        service, qty = _validate_dental_service(
-            row
-        )
+        config = _resolve_tenant_config(row)
+        qty = _resolve_item_and_qty(row, config)
+        rate = _resolve_price(row, config)
 
         item = {
-            "item_code": service.erpnext_item,
+            "item_code": config.erpnext_item,
             "qty": qty,
-            "description": service.service_name,
+            # The resolved tenant selling price is written explicitly so the
+            # invoice preserves the actual historical rate. Later tenant price
+            # changes never alter an already-created invoice.
+            "rate": rate,
+            "description": _config_display_name(config),
         }
 
         if row.remarks:

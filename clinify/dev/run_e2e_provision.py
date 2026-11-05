@@ -15,6 +15,7 @@ def run():
         admin_password=os.environ["CLINIFY_E2E_ADMIN_PASSWORD"],
         administrator_name="Frontend E2E Administrator 01",
         domain=None,
+        registered_country="India",
     )
 
     print(result)

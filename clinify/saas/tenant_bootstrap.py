@@ -198,10 +198,14 @@ ADMIN_PERMISSIONS = {
         "submit": 0, "cancel": 0, "amend": 0,
     },
     "Clinify Subscription": {
-        "read": 0, "write": 0, "create": 0, "delete": 0,
+        "read": 1, "write": 1, "create": 0, "delete": 0,
         "submit": 0, "cancel": 0, "amend": 0,
     },
     "Dental Service": {
+        "read": 1, "write": 1, "create": 1, "delete": 1,
+        "submit": 0, "cancel": 0, "amend": 0,
+    },
+    "Clinify Tenant Dental Service": {
         "read": 1, "write": 1, "create": 1, "delete": 1,
         "submit": 0, "cancel": 0, "amend": 0,
     },
@@ -1144,6 +1148,36 @@ def reconcile_tenant_foundation():
     }
 
 
+def reconcile_tenant_catalogue():
+    """Reconcile Clinify-owned catalogue records on one existing tenant."""
+    frappe.only_for("System Manager")
+
+    site_name = (frappe.local.site or "").strip().lower()
+    control_site = (
+        frappe.conf.get("clinify_control_site") or "clinify.localhost"
+    ).strip().lower()
+
+    from clinify.saas.sso import _is_control_site
+
+    if site_name == control_site or _is_control_site():
+        frappe.throw("Tenant catalogue reconciliation cannot run on the control site.")
+
+    _ensure_clinify_catalogue()
+    frappe.clear_cache()
+
+    return {
+        "success": True,
+        "site": site_name,
+        "reconciled": [
+            "Consultation Item",
+            "Clinify Dental Services",
+            "Clinify lab-test templates",
+        ],
+        "deferred": ["Medicine catalogue synchronization"],
+        "excluded": ["Clinical Procedure Template"],
+    }
+
+
 def _ensure_clinify_catalogue():
     """
     Ensure the minimum Clinify clinical catalogue exists in a tenant.
@@ -1197,16 +1231,6 @@ def _ensure_clinify_catalogue():
         item.insert(ignore_permissions=True)
 
     # -------------------------------------------------
-    # Common Medicines
-    # -------------------------------------------------
-
-    from clinify.importers.drug_importer import (
-        import_common_medicines,
-    )
-
-    import_common_medicines()
-
-    # -------------------------------------------------
     # Lab Test Templates
     # -------------------------------------------------
 
@@ -1225,6 +1249,20 @@ def _ensure_clinify_catalogue():
     )
 
     install_dental_catalogue()
+
+    # -------------------------------------------------
+    # Tenant Dental Service Configuration & Pricing
+    # -------------------------------------------------
+
+    # Provision the tenant-owned dental service configuration layer from the
+    # standard catalogue. This is idempotent: it only adds configurations for
+    # newly provisioned standard services and never overwrites tenant selling
+    # prices, enabled/disabled state, variable options or custom services.
+    from clinify.tenant_dental_config import (
+        ensure_tenant_dental_service_configs,
+    )
+
+    ensure_tenant_dental_service_configs()
 
     frappe.db.commit()
 

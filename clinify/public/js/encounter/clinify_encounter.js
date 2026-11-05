@@ -928,7 +928,6 @@ function setup_clinify_prescription_grid(
     const visible_fields = [
 
         "drug_code",
-        "drug_name",
         "dosage",
         "period",
         "custom_instruction",
@@ -938,10 +937,9 @@ function setup_clinify_prescription_grid(
 
     const column_config = {
 
-        drug_code: 2,
-        drug_name: 3,
-        dosage: 2,
-        period: 1,
+        drug_code: 3,
+        dosage: 3,
+        period: 2,
         custom_instruction: 2,
 
     };
@@ -1043,10 +1041,10 @@ function setup_clinify_prescription_grid(
     grid.setup_visible_columns();
 
 
-    // Clinify medication-backed Drug Code selector.
-    // Drug Prescription.drug_code remains the visible selector,
-    // but only Items linked to active Healthcare Medications
-    // may be selected.
+    // Clinify Case 1 medicine catalogue selector.
+    // Drug Prescription.drug_code remains the visible selector.
+    // The selected Item itself is the medicine catalogue record;
+    // Medication / Medication Linked Item resolution is not required.
     frm.set_query(
         "drug_code",
         "drug_prescription",
@@ -1069,142 +1067,9 @@ function setup_clinify_prescription_grid(
 // ============================================================
 // DRUG PRESCRIPTION AUTO-FILL
 // ============================================================
-
-frappe.ui.form.on(
-    "Drug Prescription",
-    {
-
-        drug_code(
-            frm,
-            cdt,
-            cdn
-        ) {
-
-            const row =
-                locals[cdt][cdn];
-
-
-            if (
-                !row.drug_code
-            ) {
-
-                return;
-
-            }
-
-
-            frappe.call({
-
-                method:
-                    "clinify.api.drug_search.get_drug_prescription_defaults",
-
-
-                args: {
-
-                    drug_code:
-                        row.drug_code,
-
-                },
-
-
-                callback(r) {
-
-                    if (
-                        !r.message
-                    ) {
-
-                        return;
-
-                    }
-
-
-                    const data =
-                        r.message;
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "drug_name",
-                        data.drug_name || ""
-                    );
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "strength",
-                        data.strength || 0
-                    );
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "strength_uom",
-                        data.strength_uom || ""
-                    );
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "dosage_form",
-                        data.dosage_form || ""
-                    );
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "dosage",
-                        data.dosage || ""
-                    );
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "period",
-                        data.period || ""
-                    );
-
-
-                    if (
-                        data.interval !== null &&
-                        data.interval !== undefined
-                    ) {
-
-                        frappe.model.set_value(
-                            cdt,
-                            cdn,
-                            "interval",
-                            data.interval
-                        );
-
-                    }
-
-
-                    frappe.model.set_value(
-                        cdt,
-                        cdn,
-                        "interval_uom",
-                        data.interval_uom || ""
-                    );
-
-
-                    frm.refresh_field(
-                        "drug_prescription"
-                    );
-
-                },
-
-            });
-
-        },
-
-    }
-);
+// Active handler lives in public/js/drug_prescription.js.
+// Duplicate handler intentionally removed to prevent double API calls.
+// ============================================================
 
 
 // ============================================================
@@ -1428,6 +1293,8 @@ function setup_clinify_dental_services_grid(frm) {
     const field =
         frm.fields_dict.custom_dental_services;
 
+    clinify_setup_dental_service_link_query(frm);
+
     if (!field || !field.grid) {
         return;
     }
@@ -1529,6 +1396,183 @@ function setup_clinify_dental_services_grid(frm) {
     }
 
     render_clinify_dental_rows(frm);
+}
+
+
+
+function clinify_select_variable_dental_price(
+    frm,
+    grid_row,
+    service_name,
+    callback
+) {
+
+    frappe.call({
+        method:
+            "clinify.api.dental_service.get_encounter_dental_service_options",
+
+        freeze: true,
+
+        freeze_message:
+            __("Loading Dental Service pricing..."),
+
+        callback: function(r) {
+
+            if (r.exc) {
+                frappe.msgprint({
+                    title: __("Dental Service Error"),
+                    message: __(
+                        "Unable to load Dental Service pricing."
+                    ),
+                    indicator: "red"
+                });
+                return;
+            }
+
+            const services = r.message || [];
+
+            const service = services.find(function(item) {
+                return item.name === service_name ||
+                       item.dental_service === service_name ||
+                       item.service_name === service_name;
+            });
+
+            if (!service) {
+                frappe.msgprint({
+                    title: __("Dental Service Error"),
+                    message: __(
+                        "The selected Dental Service could not be resolved."
+                    ),
+                    indicator: "red"
+                });
+                return;
+            }
+
+            if (
+                service.pricing_type !== "Variable" ||
+                !service.price_options ||
+                !service.price_options.length
+            ) {
+                if (typeof callback === "function") {
+                    callback(service, null);
+                }
+                return;
+            }
+
+            const enabled_options =
+                service.price_options.filter(function(option) {
+                    return option.is_enabled !== 0;
+                });
+
+            if (!enabled_options.length) {
+                frappe.msgprint({
+                    title: __("Pricing Error"),
+                    message: __(
+                        "No enabled price options are configured for this Dental Service."
+                    ),
+                    indicator: "red"
+                });
+                return;
+            }
+
+            const option_dialog =
+                new frappe.ui.Dialog({
+
+                    title:
+                        __("Select Price Option"),
+
+                    fields: [
+                        {
+                            fieldname: "price_option",
+                            fieldtype: "Select",
+                            label: __("Price Option"),
+                            reqd: 1,
+                            options: [
+                                "",
+                                ...enabled_options.map(function(option) {
+                                    return (
+                                        option.option_label +
+                                        " (" +
+                                        format_currency(option.price) +
+                                        ")"
+                                    );
+                                })
+                            ]
+                        }
+                    ],
+
+                    primary_action_label:
+                        __("Continue"),
+
+                    primary_action:
+                        function(values) {
+
+                            if (!values.price_option) {
+                                frappe.msgprint({
+                                    title:
+                                        __("Price Option Required"),
+                                    message:
+                                        __("Please select a price option."),
+                                    indicator: "red"
+                                });
+                                return;
+                            }
+
+                            option_dialog.hide();
+
+                            const selected_option =
+                                enabled_options.find(function(option) {
+                                    return (
+                                        option.option_label +
+                                        " (" +
+                                        format_currency(option.price) +
+                                        ")" ===
+                                        values.price_option
+                                    );
+                                });
+
+                            if (!selected_option) {
+                                frappe.msgprint({
+                                    title: __("Pricing Error"),
+                                    message: __(
+                                        "The selected price option could not be resolved."
+                                    ),
+                                    indicator: "red"
+                                });
+                                return;
+                            }
+
+                            callback(
+                                service,
+                                selected_option.name
+                            );
+                        }
+                });
+
+            option_dialog.show();
+        }
+    });
+}
+
+
+function clinify_setup_dental_service_link_query(frm) {
+    if (frm.__clinify_dental_service_link_query_set) {
+        return;
+    }
+
+    frm.__clinify_dental_service_link_query_set = true;
+
+    frm.set_query(
+        "dental_service",
+        "custom_dental_services",
+        function() {
+            return {
+                query:
+                    "clinify.api.dental_service.get_encounter_dental_service_link_options",
+                page_length: 50
+            };
+        }
+    );
 }
 
 
@@ -1865,17 +1909,39 @@ frappe.ui.form.on(
                         );
 
                     if (grid_row) {
+
                         update_clinify_tooth_cell(
                             frm,
                             grid_row
                         );
+
+                        clinify_select_variable_dental_price(
+                            frm,
+                            grid_row,
+                            row.dental_service,
+                            function(
+                                service,
+                                selected_price_option
+                            ) {
+
+                                if (
+                                    !selected_price_option
+                                ) {
+                                    return;
+                                }
+
+                                frappe.model.set_value(
+                                    cdt,
+                                    cdn,
+                                    "selected_price_option",
+                                    selected_price_option
+                                );
+                            }
+                        );
                     }
                 }
-
             });
-
         }
-
     }
 );
 
@@ -1890,10 +1956,88 @@ frappe.ui.form.on(
     "Patient Encounter",
     {
 
-        validate(frm) {
+        async validate(frm) {
 
             const rows =
                 frm.doc.custom_dental_services || [];
+
+            const prescription_rows =
+                frm.doc.drug_prescription || [];
+
+            const zero_prescription_rows =
+                prescription_rows.filter((row) => {
+                    const zero_dosage =
+                        String(row.dosage || "").trim() === "0-0-0";
+
+                    const zero_period =
+                        String(row.period || "").trim() === "0 Day";
+
+                    return zero_dosage || zero_period;
+                });
+
+            if (zero_prescription_rows.length) {
+
+                const medicine_lines =
+                    zero_prescription_rows.map((row) => {
+
+                        const medicine =
+                            row.drug_name ||
+                            row.drug_code ||
+                            __("Medicine");
+
+                        const details = [];
+
+                        if (
+                            String(row.dosage || "").trim() === "0-0-0"
+                        ) {
+                            details.push(
+                                "<strong>" + __("Dosage") + ":</strong> 0-0-0"
+                            );
+                        }
+
+                        if (
+                            String(row.period || "").trim() === "0 Day"
+                        ) {
+                            details.push(
+                                "<strong>" + __("Period") + ":</strong> 0 Day"
+                            );
+                        }
+
+                        return `• ${frappe.utils.escape_html(medicine)} — ${details.join(", ")}`;
+                    });
+
+                const message = `
+                    <p>
+                        ${__("The following medicines have a zero dosage and/or period:")}
+                    </p>
+                    <ul>
+                        ${medicine_lines.map((line) => `<li>${line.replace(/^• /, "")}</li>`).join("")}
+                    </ul>
+                    <p>
+                        ${__("Do you want to proceed with keeping it as zero or change the zero value?")}
+                    </p>
+                `;
+
+                await new Promise((resolve) => {
+
+                    frappe.confirm(
+                        __("Prescription reminder") + "<br><br>" + message,
+                        () => {
+                            resolve();
+                        },
+                        () => {
+                            frappe.validated = false;
+                            resolve();
+                        }
+                    );
+
+                });
+
+                if (!frappe.validated) {
+                    return;
+                }
+
+            }
 
             for (const row of rows) {
 
@@ -1905,16 +2049,20 @@ frappe.ui.form.on(
                     );
                 }
 
-                if (
-                    typeof row.__clinify_requires_tooth ===
-                    "undefined"
-                ) {
-                    frappe.throw(
-                        __(
-                            "Dental Service information is still loading for row {0}. Please wait a moment and try again.",
-                            [row.idx]
-                        )
-                    );
+                const response = await frappe.db.get_value(
+                    "Dental Service",
+                    row.dental_service,
+                    ["requires_tooth", "default_qty"]
+                );
+
+                const values = response.message || {};
+
+                row.qty = Number(values.default_qty || 1);
+                row.__clinify_requires_tooth =
+                    Number(values.requires_tooth || 0) === 1 ? 1 : 0;
+
+                if (!row.__clinify_requires_tooth) {
+                    row.tooth_area = "";
                 }
 
                 const requires_tooth =

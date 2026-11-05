@@ -208,7 +208,7 @@ frappe.ui.form.on("Drug Prescription", {
                     cdt,
                     cdn,
                     "dosage",
-                    data.dosage || ""
+                    data.dosage || (data.catalogue_only ? "0-0-0" : "")
                 );
 
 
@@ -216,7 +216,7 @@ frappe.ui.form.on("Drug Prescription", {
                     cdt,
                     cdn,
                     "period",
-                    data.period || ""
+                    data.period || (data.catalogue_only ? "0 Day" : "")
                 );
 
 

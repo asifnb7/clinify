@@ -303,6 +303,48 @@ class TestTenantBootstrapSetupFinalization(unittest.TestCase):
         ensure_role.assert_not_called()
 
 
+    def test_reconcile_tenant_catalogue_invokes_only_catalogue_provisioner(self):
+        with patch.object(tenant_bootstrap.frappe, "only_for") as only_for, \
+             patch.object(tenant_bootstrap.frappe.local, "site", "beta-final-e2e-071026.localhost"), \
+             patch.object(tenant_bootstrap.frappe, "conf", {"clinify_control_site": "clinify.localhost"}), \
+             patch("clinify.saas.sso._is_control_site", return_value=False), \
+             patch.object(tenant_bootstrap, "_ensure_clinify_catalogue") as ensure_catalogue, \
+             patch.object(tenant_bootstrap, "bootstrap_tenant") as bootstrap, \
+             patch.object(tenant_bootstrap, "_ensure_admin_role") as ensure_role, \
+             patch.object(tenant_bootstrap, "_ensure_gender_master_data") as ensure_gender, \
+             patch.object(tenant_bootstrap.frappe, "clear_cache") as clear_cache:
+            first = tenant_bootstrap.reconcile_tenant_catalogue()
+            second = tenant_bootstrap.reconcile_tenant_catalogue()
+
+        only_for.assert_called_with("System Manager")
+        self.assertEqual(only_for.call_count, 2)
+        self.assertEqual(ensure_catalogue.call_count, 2)
+        bootstrap.assert_not_called()
+        ensure_role.assert_not_called()
+        ensure_gender.assert_not_called()
+        self.assertEqual(clear_cache.call_count, 2)
+        self.assertEqual(first["site"], "beta-final-e2e-071026.localhost")
+        self.assertEqual(second["excluded"], ["Clinical Procedure Template"])
+
+    def test_reconcile_tenant_catalogue_refuses_control_site(self):
+        def raise_without_frappe_translation(message):
+            raise RuntimeError(message)
+
+        with patch.object(tenant_bootstrap.frappe, "only_for"), \
+             patch.object(tenant_bootstrap.frappe.local, "site", "clinify.localhost"), \
+             patch.object(tenant_bootstrap.frappe, "conf", {"clinify_control_site": "clinify.localhost"}), \
+             patch("clinify.saas.sso._is_control_site", return_value=False), \
+             patch.object(tenant_bootstrap.frappe, "throw", side_effect=raise_without_frappe_translation), \
+             patch.object(tenant_bootstrap, "_ensure_clinify_catalogue") as ensure_catalogue:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "^Tenant catalogue reconciliation cannot run on the control site\\.$",
+            ):
+                tenant_bootstrap.reconcile_tenant_catalogue()
+
+        ensure_catalogue.assert_not_called()
+
+
     def test_healthcare_workspace_fixture_allows_clinify_clinic_admin(self):
         fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "workspace.json"
 

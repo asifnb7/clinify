@@ -46,7 +46,7 @@ function open_dental_palette(frm) {
     frappe.call({
 
         method:
-            "clinify.api.dental_service.get_active_dental_services",
+            "clinify.api.dental_service.get_encounter_dental_service_options",
 
         freeze: true,
 
@@ -103,6 +103,11 @@ function open_dental_palette(frm) {
 
             services.forEach(function(service) {
 
+                const pricing_badge =
+                    service.pricing_type === "Variable"
+                        ? '<span style="font-size:11px;opacity:0.75;">Variable</span>'
+                        : '<span style="font-size:11px;opacity:0.75;">Fixed</span>';
+
                 html += `
                     <button
                         type="button"
@@ -115,7 +120,7 @@ function open_dental_palette(frm) {
                     >
                         🦷 ${frappe.utils.escape_html(
                             service.service_name
-                        )}
+                        )}<br>${pricing_badge}
                     </button>
                 `;
 
@@ -201,6 +206,79 @@ function add_service(
     }
 
     /*
+     * Variable pricing requires the doctor to pick one predefined tenant
+     * price option. Fixed services need no pricing interaction here.
+     */
+    if (
+        service.pricing_type === "Variable" &&
+        service.price_options &&
+        service.price_options.length
+    ) {
+
+        const option_dialog = new frappe.ui.Dialog({
+
+            title:
+                __("Select Price Option"),
+
+            fields: [
+                {
+                    fieldname: "price_option",
+
+                    fieldtype: "Select",
+
+                    label:
+                        __("Price Option"),
+
+                    reqd: 1,
+
+                    options: ["", ...service.price_options.map(function(option) {
+                        return option.name + "|" + option.option_label +
+                            " (" + format_currency(option.price) + ")";
+                    })]
+                }
+            ],
+
+            primary_action_label:
+                __("Continue"),
+
+            primary_action:
+                function(values) {
+
+                    if (!values.price_option) {
+
+                        frappe.msgprint({
+                            title: __("Price Option Required"),
+                            message: __(
+                                "Please select a price option."
+                            ),
+                            indicator: "red"
+                        });
+
+                        return;
+                    }
+
+                    option_dialog.hide();
+
+                    add_service_step(
+                        frm,
+                        service,
+                        values.price_option
+                    );
+                }
+        });
+
+        option_dialog.show();
+
+        return;
+    }
+
+    add_service_step(frm, service, null);
+}
+
+
+function add_service_step(frm, service, selected_price_option) {
+
+    /*
      * Dental Service is the authoritative catalogue.
      *
      * requires_tooth = 1
@@ -274,7 +352,8 @@ function add_service(
                         add_dental_service_row(
                             frm,
                             service,
-                            tooth_area
+                            tooth_area,
+                            selected_price_option
                         );
                     }
             });
@@ -287,7 +366,8 @@ function add_service(
     add_dental_service_row(
         frm,
         service,
-        ""
+        "",
+        selected_price_option
     );
 }
 
@@ -295,7 +375,8 @@ function add_service(
 function add_dental_service_row(
     frm,
     service,
-    tooth_area
+    tooth_area,
+    selected_price_option
 ) {
 
     const row =
@@ -303,8 +384,18 @@ function add_dental_service_row(
             "custom_dental_services"
         );
 
-    row.dental_service =
-        service.name;
+    // Exactly one service reference must be set (enforced server-side in
+    // Clinify Encounter Service.validate). Standard services use the central
+    // catalogue link; custom services use the tenant configuration link.
+    if (service.dental_service) {
+        row.dental_service = service.dental_service;
+    } else {
+        row.tenant_dental_service = service.name;
+    }
+
+    if (selected_price_option) {
+        row.selected_price_option = selected_price_option;
+    }
 
     row.qty =
         service.default_qty || 1;

@@ -99,6 +99,7 @@ def _create_site(site_name, admin_password):
 TENANT_CONFIG_KEYS = (
     "CLINIFY_CONTROL_SITE",
     "CLINIFY_CONTROL_URL",
+    "CLINIFY_CATALOGUE_SYNC_USER",
     "CLINIFY_SSO_LOCAL_DEVELOPMENT",
 )
 

@@ -303,25 +303,28 @@ def install():
     created_items = 0
     created_services = 0
     created_prices = 0
+    existing_services = 0
 
     for service in SERVICES:
 
         code = service["code"]
+
+        existing_service = frappe.db.exists(
+            "Dental Service",
+            {"service_code": code},
+        )
+
+        if existing_service:
+            existing_services += 1
+            continue
 
         # -------------------------------------------------
         # ERPNext Item
         # -------------------------------------------------
 
         if frappe.db.exists("Item", code):
-
             item = frappe.get_doc("Item", code)
-
-            if item.disabled:
-                item.disabled = 0
-                item.save(ignore_permissions=True)
-
         else:
-
             item = frappe.get_doc({
                 "doctype": "Item",
                 "item_code": code,
@@ -340,36 +343,20 @@ def install():
         # Clinify Dental Service
         # -------------------------------------------------
 
-        if frappe.db.exists("Dental Service", code):
-
-            dental_service = frappe.get_doc(
-                "Dental Service",
-                code
-            )
-
-        else:
-
-            dental_service = frappe.get_doc({
-                "doctype": "Dental Service",
-                "service_code": code,
-                "service_name": service["name"],
-                "erpnext_item": code,
-                "is_active": 1,
-                "default_qty": 1,
-            })
-
-            dental_service.insert(ignore_permissions=True)
-            created_services += 1
-
-        dental_service.erpnext_item = code
-        dental_service.is_active = 1
-        dental_service.default_qty = 1
-        dental_service.pricing_basis = service["basis"]
-        dental_service.minimum_price = service["minimum"]
-        dental_service.maximum_price = service["maximum"]
-        dental_service.requires_tooth = service["requires_tooth"]
-
-        dental_service.save(ignore_permissions=True)
+        dental_service = frappe.get_doc({
+            "doctype": "Dental Service",
+            "service_code": code,
+            "service_name": service["name"],
+            "erpnext_item": code,
+            "is_active": 1,
+            "default_qty": 1,
+            "pricing_basis": service["basis"],
+            "minimum_price": service["minimum"],
+            "maximum_price": service["maximum"],
+            "requires_tooth": service["requires_tooth"],
+        })
+        dental_service.insert(ignore_permissions=True)
+        created_services += 1
 
         # -------------------------------------------------
         # ERPNext Standard Selling Price
@@ -385,20 +372,7 @@ def install():
             "name",
         )
 
-        if existing_price:
-
-            price = frappe.get_doc(
-                "Item Price",
-                existing_price
-            )
-
-            price.price_list_rate = service["minimum"]
-            price.currency = "INR"
-            price.selling = 1
-            price.save(ignore_permissions=True)
-
-        else:
-
+        if not existing_price:
             frappe.get_doc({
                 "doctype": "Item Price",
                 "item_code": code,
@@ -421,6 +395,7 @@ def install():
     print("Items created      :", created_items)
     print("Services created   :", created_services)
     print("Prices created     :", created_prices)
+    print("Services preserved :", existing_services)
     print("")
     print("Consultation       : EXCLUDED")
     print("Price List         : Standard Selling")
