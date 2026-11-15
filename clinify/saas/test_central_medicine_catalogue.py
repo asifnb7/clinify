@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import frappe
 from clinify import medicine_catalogue_sync
+from clinify.api import drug_search
 from clinify.clinify.doctype.clinify_medicine_projection.clinify_medicine_projection import (
     ClinifyMedicineProjection,
 )
@@ -30,6 +31,85 @@ def product(product_id, strength, dosage_form="Tablet", active=1):
         "source_updated_at": "",
         "is_active": active,
     }
+
+
+def medicine_item_catalogue(item_code="AMLODIPINE-5-TAB", disabled=0):
+    return {
+        "catalogue_type": "drug_item_catalogue_v1",
+        "items": [
+            {
+                "item_code": item_code,
+                "item_name": "Amlodipine 5mg Tablet",
+                "item_group": "Drug",
+                "disabled": disabled,
+                "is_stock_item": 1,
+                "is_sales_item": 1,
+                "stock_uom": "Nos",
+                "description": "Amlodipine 5mg Tablet",
+            }
+        ],
+        "medications": [
+            {
+                "name": "Amlodipine",
+                "generic_name": "Amlodipine",
+                "medication_class": "Antihypertensive",
+                "strength": 5,
+                "strength_uom": "Milligram",
+                "dosage_form": "Tablet",
+                "disabled": 0,
+                "is_combination": 0,
+                "default_prescription_dosage": "0-0-0",
+                "default_prescription_duration": "0 Day",
+                "linked_items": [
+                    {
+                        "item_code": item_code,
+                        "item": item_code,
+                        "item_group": "Drug",
+                        "stock_uom": "Nos",
+                        "is_billable": 1,
+                    }
+                ],
+                "combinations": [],
+            }
+        ],
+        "medication_classes": [
+            {
+                "name": "Antihypertensive",
+                "medication_class": "Antihypertensive",
+            }
+        ],
+        "dosage_forms": [{"name": "Tablet", "dosage_form": "Tablet"}],
+        "uoms": [
+            {
+                "name": "Milligram",
+                "uom_name": "Milligram",
+                "must_be_whole_number": 0,
+                "enabled": 1,
+            },
+            {
+                "name": "Nos",
+                "uom_name": "Nos",
+                "must_be_whole_number": 1,
+                "enabled": 1,
+            },
+        ],
+        "prescription_dosages": [{"name": "0-0-0", "dosage": "0-0-0"}],
+        "prescription_durations": [
+            {"name": "0 Day", "number": 0, "period": "Day"}
+        ],
+    }
+
+
+def add_catalogue_item(catalogue, item_code, item_name):
+    item = deepcopy(catalogue["items"][0])
+    item.update(
+        {
+            "item_code": item_code,
+            "item_name": item_name,
+            "description": item_name,
+        }
+    )
+    catalogue["items"].append(item)
 
 
 class FakeStateStore:
@@ -61,7 +141,8 @@ class FakeStateStore:
 
 class FakeAtomicTransport:
     def __init__(self):
-        self.projections = {}
+        self.items = {}
+        self.medications = {}
         self.prices = {"local-item": 345.0}
         self.clinic_configuration = {"currency": "INR", "clinic_name": "Local Clinic"}
         self.fail_after_first_write = False
@@ -70,54 +151,40 @@ class FakeAtomicTransport:
 
     def apply_projection_batch_atomically(self, tenant_site, snapshot_manifest, products):
         self.apply_count += 1
-        catalogue_revision = snapshot_manifest["revision"]
-        previous = {key: dict(value) for key, value in self.projections.items()}
-        created_ids = []
-        updated_ids = []
-        skipped_ids = []
+        previous = deepcopy((self.items, self.medications))
+        created_codes = []
+        updated_codes = []
+        skipped_codes = []
         try:
-            for index, product_record in enumerate(products):
-                product_id = product_record["central_product_id"]
-                projected = {
-                    key: product_record[key]
-                    for key in (
-                        "central_product_id",
-                        "ingredient_name",
-                        "strength",
-                        "strength_uom",
-                        "dosage_form",
-                        "is_active",
-                        "source_provider",
-                        "source_identifier",
-                        "source_revision",
-                        "source_updated_at",
-                    )
-                }
-                projected["catalogue_revision"] = catalogue_revision
-                if self.projections.get(product_id) == projected:
-                    skipped_ids.append(product_id)
-                elif product_id in self.projections:
-                    self.projections[product_id] = projected
-                    updated_ids.append(product_id)
+            catalogue = products
+            for index, item in enumerate(catalogue["items"]):
+                item_code = item["item_code"]
+                if self.items.get(item_code) == item:
+                    skipped_codes.append(item_code)
+                elif item_code in self.items:
+                    self.items[item_code] = deepcopy(item)
+                    updated_codes.append(item_code)
                 else:
-                    self.projections[product_id] = projected
-                    created_ids.append(product_id)
+                    self.items[item_code] = deepcopy(item)
+                    created_codes.append(item_code)
 
                 if self.fail_after_first_write and index == 0:
                     raise RuntimeError("private transport detail must not be logged")
+            for medication in catalogue["medications"]:
+                self.medications[medication["name"]] = deepcopy(medication)
         except Exception:
-            self.projections = previous
+            self.items, self.medications = previous
             raise
 
         return {
             "status": self.response_status,
             "tenant_site": tenant_site,
             "snapshot_manifest": dict(snapshot_manifest),
-            "created_product_ids": created_ids,
-            "updated_product_ids": updated_ids,
-            "skipped_product_ids": skipped_ids,
-            "missing_product_ids": [],
-            "conflicting_product_ids": [],
+            "created_item_codes": created_codes,
+            "updated_item_codes": updated_codes,
+            "skipped_item_codes": skipped_codes,
+            "missing_item_codes": [],
+            "conflicting_item_codes": [],
         }
 
 
@@ -227,6 +294,8 @@ class FakeProjectionDatabase:
     def exists(self, doctype, name):
         if doctype == "Clinify Medicine Sync State":
             return name if self.snapshot_state is not None else None
+        if doctype == "Medication Linked Item":
+            return None
         return name if name in self.records else None
 
     def savepoint(self, name):
@@ -265,6 +334,35 @@ class FakeProjectionDocument:
         self._database.records[self.name] = self
 
 
+class FakeMedicineItemDocument:
+    def __init__(self, values, database):
+        self.__dict__.update(values)
+        self._database = database
+        self.name = (
+            values.get("item_code")
+            or values.get("name")
+            or values.get("generic_name")
+            or values.get("dosage_form")
+            or values.get("medication_class")
+            or values.get("dosage")
+            or values.get("uom_name")
+        )
+
+    def save(self, ignore_permissions=False):
+        self._database.records[self.name] = self
+
+    def insert(self, ignore_permissions=False):
+        if self.name in self._database.records:
+            raise RuntimeError(f"duplicate fake document: {self.doctype} {self.name}")
+        self._database.records[self.name] = self
+
+    def get(self, fieldname, default=None):
+        return getattr(self, fieldname, default)
+
+    def set(self, fieldname, values):
+        setattr(self, fieldname, values)
+
+
 class FakeHTTPResponse:
     status_code = 200
 
@@ -279,6 +377,7 @@ class FakeHTTPTransportSession:
     def __init__(self, response=None):
         self.response = response or FakeHTTPResponse({"status": "success"})
         self.post = Mock(return_value=self.response)
+        self.close = Mock()
 
 
 class TestCentralMedicineCatalogue(unittest.TestCase):
@@ -307,14 +406,15 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
             with self.subTest(site=site), self.assertRaises(ValueError):
                 medicine_catalogue_sync.tenant_sync_credential_environment_prefix(site)
 
-    def _synchronize(self, records, transport, state, revision=REVISION_1):
-        fake_frappe = SimpleNamespace(
-            get_all=Mock(return_value=records),
-        )
-        with patch.object(medicine_catalogue_sync, "frappe", fake_frappe), patch.object(
+    def _synchronize(self, catalogue, transport, state, revision=REVISION_1):
+        with patch.object(
             medicine_catalogue_sync,
             "require_control_site_admin",
             return_value="control.example.test",
+        ), patch.object(
+            medicine_catalogue_sync,
+            "build_central_medicine_item_catalogue",
+            return_value=deepcopy(catalogue),
         ):
             result = medicine_catalogue_sync.synchronize_tenant_catalogue(
                 "clinic.example.test",
@@ -322,7 +422,7 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
                 transport,
                 state,
             )
-        return result, fake_frappe
+        return result
 
     def test_same_ingredient_supports_distinct_strengths_and_forms(self):
         validated = medicine_catalogue_sync.validate_product_batch(
@@ -369,19 +469,94 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
                 products,
             )
 
+    def test_item_snapshot_is_deterministic_and_preserves_picker_fields(self):
+        catalogue = medicine_item_catalogue()
+        manifest, normalized = (
+            medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+                catalogue, REVISION_1
+            )
+        )
+        reversed_catalogue = deepcopy(catalogue)
+        reversed_catalogue["items"].reverse()
+        reversed_manifest, _ = (
+            medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+                reversed_catalogue, REVISION_1
+            )
+        )
+
+        self.assertEqual(manifest, reversed_manifest)
+        self.assertEqual(manifest["item_count"], 1)
+        self.assertEqual(normalized["items"][0]["item_group"], "Drug")
+        self.assertEqual(normalized["items"][0]["item_name"], "Amlodipine 5mg Tablet")
+        self.assertEqual(
+            normalized["medications"][0]["linked_items"][0]["item_code"],
+            "AMLODIPINE-5-TAB",
+        )
+
+    def test_item_snapshot_rejects_unresolved_medication_relationship(self):
+        catalogue = medicine_item_catalogue()
+        catalogue["medications"][0]["linked_items"][0]["item_code"] = "MISSING"
+        catalogue["medications"][0]["linked_items"][0]["item"] = "MISSING"
+
+        with self.assertRaisesRegex(ValueError, "invalid Item relationship"):
+            medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+                catalogue, REVISION_1
+            )
+
+    def test_projected_item_remains_searchable_by_the_existing_picker(self):
+        catalogue = medicine_item_catalogue()
+        _, normalized = medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+            catalogue, REVISION_1
+        )
+        item = normalized["items"][0]
+        item_row = SimpleNamespace(
+            name=item["item_code"],
+            item_name=item["item_name"],
+            description=item["description"],
+        )
+        medication_row = SimpleNamespace(
+            item_code=item["item_code"],
+            generic_name="Amlodipine",
+        )
+        fake_frappe = SimpleNamespace(
+            db=SimpleNamespace(
+                sql=Mock(side_effect=[[item_row], [medication_row]])
+            )
+        )
+
+        with patch.object(
+            frappe.local,
+            "flags",
+            SimpleNamespace(in_test=True),
+            create=True,
+        ), patch.object(drug_search, "frappe", fake_frappe):
+            results = drug_search.get_medication_item_query(
+                doctype="Item",
+                txt="Amlodipine",
+                searchfield="item_name",
+                start=0,
+                page_len=20,
+            )
+
+        self.assertEqual(
+            results,
+            [("AMLODIPINE-5-TAB", "Amlodipine 5mg Tablet", "")],
+        )
+
     def test_repeated_sync_upserts_by_stable_id_without_duplicates(self):
         transport = FakeAtomicTransport()
         state = FakeStateStore()
-        records = [product("CLM-AAAA", 500), product("CLM-BBBB", 1000)]
+        catalogue = medicine_item_catalogue()
 
-        first, _ = self._synchronize(records, transport, state, REVISION_1)
-        second, _ = self._synchronize(records, transport, state, REVISION_1)
+        first = self._synchronize(catalogue, transport, state, REVISION_1)
+        second = self._synchronize(catalogue, transport, state, REVISION_1)
 
         self.assertEqual(first["status"], "success")
         self.assertEqual(second["status"], "success")
-        self.assertEqual(len(transport.projections), 2)
-        self.assertEqual(second["skipped"], 2)
-        self.assertEqual(second["skipped_product_ids"], ["CLM-AAAA", "CLM-BBBB"])
+        self.assertEqual(len(transport.items), 1)
+        self.assertEqual(len(transport.medications), 1)
+        self.assertEqual(second["skipped"], 1)
+        self.assertEqual(second["skipped_item_codes"], ["AMLODIPINE-5-TAB"])
         self.assertEqual(state.last_successful_revision, REVISION_1)
         self.assertEqual(transport.prices, {"local-item": 345.0})
         self.assertEqual(
@@ -389,42 +564,449 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
             {"currency": "INR", "clinic_name": "Local Clinic"},
         )
 
-    def test_invalid_batch_fails_before_transport_application(self):
+    def test_synchronize_splits_item_catalogue_into_validated_batches(self):
+        catalogue = medicine_item_catalogue()
+        second_item = deepcopy(catalogue["items"][0])
+        second_item["item_code"] = "AMLODIPINE-10-TAB"
+        second_item["item_name"] = "Amlodipine 10mg Tablet"
+        second_item["description"] = "Amlodipine 10mg Tablet"
+        catalogue["items"].append(second_item)
+        catalogue["medications"][0]["linked_items"].append(
+            {
+                "item_code": second_item["item_code"],
+                "item": second_item["item_code"],
+                "item_group": "Drug",
+                "stock_uom": "Nos",
+                "is_billable": 1,
+            }
+        )
         transport = FakeAtomicTransport()
         state = FakeStateStore()
-        transport.projections["CLM-OLD1"] = {"central_product_id": "CLM-OLD1"}
-        state.last_successful_revision = REVISION_0
-        previous_projection = {key: dict(value) for key, value in transport.projections.items()}
 
-        result, _ = self._synchronize(
-            [product("CLM-AAAA", "not-a-number")],
-            transport,
+        with patch.object(
+            medicine_catalogue_sync,
+            "_MEDICINE_ITEM_SYNC_BATCH_SIZE",
+            1,
+        ):
+            result = self._synchronize(catalogue, transport, state)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["created"], 2)
+        self.assertEqual(transport.apply_count, 2)
+        self.assertEqual(
+            set(result["created_item_codes"]),
+            {"AMLODIPINE-5-TAB", "AMLODIPINE-10-TAB"},
+        )
+        self.assertEqual(len(transport.items), 2)
+
+    def test_synchronize_splits_conflicting_batches_and_continues_safely(self):
+        catalogue = medicine_item_catalogue()
+        second_item = deepcopy(catalogue["items"][0])
+        second_item["item_code"] = "AMLODIPINE-10-TAB"
+        second_item["item_name"] = "Amlodipine 10mg Tablet"
+        second_item["description"] = "Amlodipine 10mg Tablet"
+        catalogue["items"].append(second_item)
+        catalogue["medications"][0]["linked_items"].append(
+            {
+                "item_code": second_item["item_code"],
+                "item": second_item["item_code"],
+                "item_group": "Drug",
+                "stock_uom": "Nos",
+                "is_billable": 1,
+            }
+        )
+        state = FakeStateStore()
+
+        class SplittingTransport:
+            def __init__(self):
+                self.calls = 0
+
+            def apply_projection_batch_atomically(
+                self, tenant_site, snapshot_manifest, products
+            ):
+                self.calls += 1
+                item_codes = [
+                    item["item_code"] for item in products["items"]
+                ]
+                if len(item_codes) > 1:
+                    return {
+                        "status": "conflict",
+                        "tenant_site": tenant_site,
+                        "snapshot_manifest": dict(snapshot_manifest),
+                        "created_item_codes": [],
+                        "updated_item_codes": [],
+                        "skipped_item_codes": [],
+                        "missing_item_codes": [],
+                        "conflicting_item_codes": item_codes,
+                    }
+                return {
+                    "status": "success",
+                    "tenant_site": tenant_site,
+                    "snapshot_manifest": dict(snapshot_manifest),
+                    "created_item_codes": item_codes,
+                    "updated_item_codes": [],
+                    "skipped_item_codes": [],
+                    "missing_item_codes": [],
+                    "conflicting_item_codes": [],
+                }
+
+        transport = SplittingTransport()
+        with patch.object(
+            medicine_catalogue_sync,
+            "_MEDICINE_ITEM_SYNC_BATCH_SIZE",
+            2,
+        ), self.assertLogs(
+            "clinify.medicine_catalogue_sync",
+            level="INFO",
+        ) as logs:
+            result = self._synchronize(catalogue, transport, state)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["created"], 2)
+        self.assertEqual(transport.calls, 3)
+        self.assertEqual(
+            set(result["created_item_codes"]),
+            {"AMLODIPINE-5-TAB", "AMLODIPINE-10-TAB"},
+        )
+        log_output = "\n".join(logs.output)
+        self.assertIn("normal_batch_attempts=1", log_output)
+        self.assertIn("batch_attempts=3", log_output)
+        self.assertIn("conflict_responses=1", log_output)
+        self.assertIn("split_operations=1", log_output)
+        self.assertIn("smallest_batch_size=1", log_output)
+        self.assertIn("successful_batch_count=2", log_output)
+        self.assertIn("failed_batch_count=1", log_output)
+        self.assertIn("category=item_or_snapshot", log_output)
+        self.assertNotIn("AMLODIPINE-", log_output)
+        self.assertNotIn("key-value", log_output)
+        self.assertNotIn("secret-value", log_output)
+
+    def test_medication_conflict_protects_affected_item_and_applies_unrelated_items(self):
+        catalogue = medicine_item_catalogue()
+        add_catalogue_item(catalogue, "UNRELATED-B", "Unrelated Medicine B")
+        add_catalogue_item(catalogue, "UNRELATED-C", "Unrelated Medicine C")
+
+        class MedicationConflictTransport:
+            def __init__(self):
+                self.calls = []
+
+            def apply_projection_batch_atomically(
+                self, tenant_site, snapshot_manifest, products
+            ):
+                item_codes = [
+                    item["item_code"] for item in products["items"]
+                ]
+                self.calls.append(item_codes)
+                if len(self.calls) == 1:
+                    return {
+                        "status": "conflict",
+                        "tenant_site": tenant_site,
+                        "snapshot_manifest": dict(snapshot_manifest),
+                        "created_item_codes": [],
+                        "updated_item_codes": [],
+                        "skipped_item_codes": [],
+                        "missing_item_codes": [],
+                        "conflicting_item_codes": item_codes,
+                        "conflicting_medications": ["Amlodipine"],
+                    }
+                return {
+                    "status": "success",
+                    "tenant_site": tenant_site,
+                    "snapshot_manifest": dict(snapshot_manifest),
+                    "created_item_codes": item_codes,
+                    "updated_item_codes": [],
+                    "skipped_item_codes": [],
+                    "missing_item_codes": [],
+                    "conflicting_item_codes": [],
+                }
+
+        transport = MedicationConflictTransport()
+        state = FakeStateStore()
+        with self.assertLogs("clinify.medicine_catalogue_sync", level="INFO") as logs:
+            result = self._synchronize(catalogue, transport, state)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["created"], 2)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["skipped_item_codes"], ["AMLODIPINE-5-TAB"])
+        self.assertEqual(result["conflicting_item_codes"], ["AMLODIPINE-5-TAB"])
+        self.assertEqual(len(transport.calls), 2)
+        self.assertEqual(
+            transport.calls[1],
+            ["UNRELATED-B", "UNRELATED-C"],
+        )
+        self.assertIn("split_operations=0", "\n".join(logs.output))
+
+    def test_composition_medication_conflict_protects_transitively_linked_item(self):
+        catalogue = medicine_item_catalogue()
+        add_catalogue_item(catalogue, "UNRELATED-B", "Unrelated Medicine B")
+        catalogue["medications"][0]["combinations"] = [
+            {
+                "medication": "Combination Ingredient",
+                "strength": 1,
+                "strength_uom": "Milligram",
+            }
+        ]
+        ingredient = deepcopy(catalogue["medications"][0])
+        ingredient.update(
+            {
+                "name": "Combination Ingredient",
+                "generic_name": "Combination Ingredient",
+                "strength": 1,
+                "linked_items": [],
+                "combinations": [],
+            }
+        )
+        catalogue["medications"].append(ingredient)
+
+        class MedicationConflictTransport:
+            def __init__(self):
+                self.calls = []
+
+            def apply_projection_batch_atomically(
+                self, tenant_site, snapshot_manifest, products
+            ):
+                item_codes = [
+                    item["item_code"] for item in products["items"]
+                ]
+                self.calls.append(item_codes)
+                if len(self.calls) == 1:
+                    return {
+                        "status": "conflict",
+                        "tenant_site": tenant_site,
+                        "snapshot_manifest": dict(snapshot_manifest),
+                        "created_item_codes": [],
+                        "updated_item_codes": [],
+                        "skipped_item_codes": [],
+                        "missing_item_codes": [],
+                        "conflicting_item_codes": item_codes,
+                        "conflicting_medications": ["Combination Ingredient"],
+                    }
+                return {
+                    "status": "success",
+                    "tenant_site": tenant_site,
+                    "snapshot_manifest": dict(snapshot_manifest),
+                    "created_item_codes": item_codes,
+                    "updated_item_codes": [],
+                    "skipped_item_codes": [],
+                    "missing_item_codes": [],
+                    "conflicting_item_codes": [],
+                }
+
+        transport = MedicationConflictTransport()
+        result = self._synchronize(catalogue, transport, FakeStateStore())
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["skipped_item_codes"], ["AMLODIPINE-5-TAB"])
+        self.assertEqual(result["created_item_codes"], ["UNRELATED-B"])
+        self.assertEqual(transport.calls[1], ["UNRELATED-B"])
+
+    def test_unmappable_conflicting_medication_fails_safely(self):
+        catalogue = medicine_item_catalogue()
+
+        class UnmappableConflictTransport:
+            def __init__(self):
+                self.calls = 0
+
+            def apply_projection_batch_atomically(
+                self, tenant_site, snapshot_manifest, products
+            ):
+                self.calls += 1
+                item_codes = [
+                    item["item_code"] for item in products["items"]
+                ]
+                return {
+                    "status": "conflict",
+                    "tenant_site": tenant_site,
+                    "snapshot_manifest": dict(snapshot_manifest),
+                    "created_item_codes": [],
+                    "updated_item_codes": [],
+                    "skipped_item_codes": [],
+                    "missing_item_codes": [],
+                    "conflicting_item_codes": item_codes,
+                    "conflicting_medications": ["Not In This Catalogue"],
+                }
+
+        transport = UnmappableConflictTransport()
+        state = FakeStateStore()
+        result = self._synchronize(catalogue, transport, state)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error_code"], "tenant_response_invalid")
+        self.assertEqual(transport.calls, 1)
+        self.assertIsNone(state.last_successful_revision)
+
+    def test_api_token_transport_reuses_and_closes_one_session(self):
+        tenant = SimpleNamespace(site_name="clinic.example.test")
+        manifest, normalized = medicine_catalogue_sync.create_snapshot_manifest(
+            [product("CLM-AAAA", 500)],
+            REVISION_1,
+        )
+        session = FakeHTTPTransportSession(
+            FakeHTTPResponse(
+                {
+                    "status": "success",
+                    "tenant_site": "clinic.example.test",
+                    "snapshot_manifest": manifest,
+                }
+            )
+        )
+        credentials = SimpleNamespace(
+            get_api_credentials=Mock(return_value=("key-value", "secret-value")),
+        )
+
+        with patch.object(
+            medicine_catalogue_sync.requests,
+            "Session",
+            return_value=session,
+        ) as session_factory, patch.object(
+            medicine_catalogue_sync,
+            "_tenant_sync_endpoint",
+            return_value=(tenant, "https://clinic.example.test/api/method/sync"),
+        ), patch.object(
+            medicine_catalogue_sync,
+            "configured_control_site",
+            return_value="control.example.test",
+        ):
+            with medicine_catalogue_sync.FrappeApiTokenTenantTransport(
+                credential_provider=credentials,
+            ) as transport:
+                for _ in range(2):
+                    transport.apply_projection_batch_atomically(
+                        "clinic.example.test",
+                        manifest,
+                        normalized,
+                    )
+
+        session_factory.assert_called_once_with()
+        self.assertEqual(session.post.call_count, 2)
+        self.assertEqual(session.close.call_count, 1)
+        request = session.post.call_args
+        self.assertEqual(
+            request.kwargs["headers"]["Authorization"],
+            "token key-value:secret-value",
+        )
+        self.assertEqual(request.kwargs["timeout"], 20)
+        self.assertTrue(request.kwargs["verify"])
+        self.assertFalse(request.kwargs["allow_redirects"])
+
+    def test_default_sync_closes_session_when_operation_exits_early(self):
+        session = FakeHTTPTransportSession()
+        with patch.object(
+            medicine_catalogue_sync.requests,
+            "Session",
+            return_value=session,
+        ), patch.object(
+            medicine_catalogue_sync,
+            "require_control_site_admin",
+            side_effect=RuntimeError("not a control site"),
+        ), self.assertRaisesRegex(RuntimeError, "not a control site"):
+            medicine_catalogue_sync.synchronize_tenant_catalogue(
+                "clinic.example.test",
+                REVISION_1,
+            )
+
+        session.close.assert_called_once_with()
+
+    def test_sync_preserves_tenant_medicines_outside_central_catalogue(self):
+        transport = FakeAtomicTransport()
+        state = FakeStateStore()
+        manual_item = {
+            "item_code": "SERIDON",
+            "item_name": "Seridon 10mg",
+            "item_group": "Drug",
+            "disabled": 0,
+            "is_stock_item": 0,
+            "is_sales_item": 1,
+            "stock_uom": "Nos",
+            "description": "Tenant-created medicine",
+        }
+        transport.items["SERIDON"] = dict(manual_item)
+
+        result = self._synchronize(
+            medicine_item_catalogue(), transport, state
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(transport.items["SERIDON"], manual_item)
+        self.assertEqual(len(transport.items), 2)
+
+    def test_sync_accepts_tenant_owned_item_conflict_as_a_skipped_item(self):
+        catalogue = medicine_item_catalogue()
+        catalogue["items"].append(
+            {
+                "item_code": "SERIDON",
+                "item_name": "Seridon",
+                "item_group": "Drug",
+                "disabled": 0,
+                "is_stock_item": 1,
+                "is_sales_item": 1,
+                "stock_uom": "Nos",
+                "description": "Seridon",
+            }
+        )
+        catalogue["source_item_codes"] = [
+            "AMLODIPINE-10-TAB",
+            "AMLODIPINE-5-TAB",
+            "SERIDON",
+        ]
+        state = FakeStateStore()
+
+        class ConflictAwareTransport:
+            def apply_projection_batch_atomically(
+                self, tenant_site, snapshot_manifest, products
+            ):
+                return {
+                    "status": "success",
+                    "tenant_site": tenant_site,
+                    "snapshot_manifest": dict(snapshot_manifest),
+                    "created_item_codes": ["AMLODIPINE-5-TAB"],
+                    "updated_item_codes": [],
+                    "skipped_item_codes": ["SERIDON"],
+                    "missing_item_codes": [],
+                    "conflicting_item_codes": ["SERIDON"],
+                }
+
+        result = self._synchronize(
+            catalogue,
+            ConflictAwareTransport(),
             state,
         )
 
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["conflicting_item_codes"], ["SERIDON"])
+        self.assertEqual(state.last_successful_revision, REVISION_1)
+
+    def test_invalid_batch_fails_before_transport_application(self):
+        transport = FakeAtomicTransport()
+        state = FakeStateStore()
+        state.last_successful_revision = REVISION_0
+        catalogue = medicine_item_catalogue()
+        catalogue["items"][0]["item_name"] = ""
+
+        result = self._synchronize(catalogue, transport, state)
+
         self.assertEqual(result["error_code"], "invalid_central_batch")
         self.assertEqual(transport.apply_count, 0)
-        self.assertEqual(transport.projections, previous_projection)
+        self.assertEqual(transport.items, {})
         self.assertEqual(state.last_attempt_status, "Failed")
         self.assertEqual(state.last_successful_revision, REVISION_0)
 
     def test_transport_failure_preserves_last_projection_and_success_revision(self):
         transport = FakeAtomicTransport()
         state = FakeStateStore()
-        first, _ = self._synchronize(
-            [product("CLM-AAAA", 500)],
-            transport,
-            state,
-            REVISION_1,
-        )
-        previous_projection = {key: dict(value) for key, value in transport.projections.items()}
+        catalogue = medicine_item_catalogue()
+        first = self._synchronize(catalogue, transport, state, REVISION_1)
+        previous_items = deepcopy(transport.items)
         previous_prices = dict(transport.prices)
         previous_configuration = dict(transport.clinic_configuration)
         transport.fail_after_first_write = True
 
         with self.assertLogs("clinify.medicine_catalogue_sync", level="WARNING") as logs:
-            failed, _ = self._synchronize(
-                [product("CLM-AAAA", 500), product("CLM-BBBB", 1000)],
+            failed = self._synchronize(
+                medicine_item_catalogue("AMLODIPINE-10-TAB"),
                 transport,
                 state,
                 REVISION_2,
@@ -432,28 +1014,29 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
 
         self.assertEqual(first["status"], "success")
         self.assertEqual(failed["error_code"], "tenant_sync_failed")
-        self.assertEqual(transport.projections, previous_projection)
+        self.assertEqual(transport.items, previous_items)
         self.assertEqual(transport.prices, previous_prices)
         self.assertEqual(transport.clinic_configuration, previous_configuration)
         self.assertEqual(state.last_attempted_revision, REVISION_2)
         self.assertEqual(state.last_successful_revision, REVISION_1)
         self.assertNotIn("private transport detail", " ".join(logs.output))
 
-    def test_inactive_product_is_projected_not_deleted(self):
+    def test_disabled_item_state_is_projected_without_deleting_the_item(self):
         transport = FakeAtomicTransport()
         state = FakeStateStore()
-        self._synchronize([product("CLM-AAAA", 500)], transport, state)
+        catalogue = medicine_item_catalogue()
+        self._synchronize(catalogue, transport, state)
 
-        result, _ = self._synchronize(
-            [product("CLM-AAAA", 500, active=0)],
+        result = self._synchronize(
+            medicine_item_catalogue(disabled=1),
             transport,
             state,
             REVISION_2,
         )
 
         self.assertEqual(result["status"], "success")
-        self.assertIn("CLM-AAAA", transport.projections)
-        self.assertEqual(transport.projections["CLM-AAAA"]["is_active"], 0)
+        self.assertIn("AMLODIPINE-5-TAB", transport.items)
+        self.assertEqual(transport.items["AMLODIPINE-5-TAB"]["disabled"], 1)
 
     def test_missing_or_conflicting_tenant_result_does_not_advance_success(self):
         state = FakeStateStore()
@@ -465,22 +1048,22 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
                     "status": "failed",
                     "tenant_site": tenant_site,
                     "snapshot_manifest": dict(snapshot_manifest),
-                    "created_product_ids": [],
-                    "updated_product_ids": [],
-                    "skipped_product_ids": [],
-                    "conflicting_product_ids": ["CLM-AAAA"],
-                    "missing_product_ids": [],
+                    "created_item_codes": [],
+                    "updated_item_codes": [],
+                    "skipped_item_codes": [],
+                    "conflicting_item_codes": ["AMLODIPINE-5-TAB"],
+                    "missing_item_codes": [],
                 }
 
-        result, _ = self._synchronize(
-            [product("CLM-AAAA", 500)],
+        result = self._synchronize(
+            medicine_item_catalogue(),
             ConflictingTransport(),
             state,
             REVISION_1,
         )
 
         self.assertEqual(result["error_code"], "tenant_identity_conflict")
-        self.assertEqual(result["conflicting_product_ids"], ["CLM-AAAA"])
+        self.assertEqual(result["conflicting_item_codes"], ["AMLODIPINE-5-TAB"])
         self.assertEqual(state.last_successful_revision, REVISION_0)
 
     def test_unreported_tenant_product_is_reported_as_missing(self):
@@ -492,23 +1075,23 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
                     "status": "success",
                     "tenant_site": tenant_site,
                     "snapshot_manifest": dict(snapshot_manifest),
-                    "created_product_ids": [],
-                    "updated_product_ids": [],
-                    "skipped_product_ids": [],
-                    "missing_product_ids": [],
-                    "conflicting_product_ids": [],
+                    "created_item_codes": [],
+                    "updated_item_codes": [],
+                    "skipped_item_codes": [],
+                    "missing_item_codes": [],
+                    "conflicting_item_codes": [],
                 }
 
         state.last_successful_revision = REVISION_0
-        result, _ = self._synchronize(
-            [product("CLM-AAAA", 500)],
+        result = self._synchronize(
+            medicine_item_catalogue(),
             IncompleteTransport(),
             state,
             REVISION_1,
         )
 
         self.assertEqual(result["error_code"], "tenant_projection_incomplete")
-        self.assertEqual(result["missing_product_ids"], ["CLM-AAAA"])
+        self.assertEqual(result["missing_item_codes"], ["AMLODIPINE-5-TAB"])
         self.assertEqual(state.last_successful_revision, REVISION_0)
 
     def test_tenant_projection_rejects_manual_identity_changes(self):
@@ -670,6 +1253,112 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
             if complete_request:
                 fake_frappe.db.commit()
             return response
+
+    def test_tenant_item_catalogue_skips_conflict_and_applies_remaining_items(self):
+        database = FakeProjectionDatabase()
+        manual_item = {
+            "item_code": "SERIDON",
+            "item_name": "Seridon 10mg",
+            "item_group": "Drug",
+            "disabled": 0,
+            "is_stock_item": 0,
+            "is_sales_item": 1,
+            "stock_uom": "Nos",
+            "description": "Tenant-created medicine",
+        }
+        database.records["SERIDON"] = dict(manual_item)
+        _, normalized_catalogue = (
+            medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+                medicine_item_catalogue(), REVISION_1
+            )
+        )
+        source_medication = normalized_catalogue["medications"][0]
+        tenant_medication = dict(source_medication)
+        tenant_medication["linked_items"] = [
+            SimpleNamespace(
+                item_code="AMLODIPINE-10-TAB",
+                item="AMLODIPINE-10-TAB",
+                item_group="Drug",
+                stock_uom="Nos",
+                is_billable=1,
+            )
+        ]
+        database.records["Amlodipine"] = FakeMedicineItemDocument(
+            tenant_medication, database
+        )
+        fake_frappe = self._tenant_request_frappe(database)
+
+        def get_doc(*args):
+            if len(args) == 1 and isinstance(args[0], dict):
+                if args[0].get("doctype") == "Clinify Medicine Sync State":
+                    return FakeSyncStateDoc(args[0], database)
+                return FakeMedicineItemDocument(args[0], database)
+            if args[0] == "Clinify Medicine Sync State":
+                return database.snapshot_state
+            record = database.records[args[1]]
+            if isinstance(record, FakeMedicineItemDocument):
+                return record
+            return FakeMedicineItemDocument(record, database)
+
+        fake_frappe.get_doc = get_doc
+        catalogue = medicine_item_catalogue()
+        catalogue["items"].append(
+            {
+                "item_code": "SERIDON",
+                "item_name": "Seridon",
+                "item_group": "Drug",
+                "disabled": 0,
+                "is_stock_item": 1,
+                "is_sales_item": 1,
+                "stock_uom": "Nos",
+                "description": "Seridon",
+            }
+        )
+        catalogue["source_item_codes"] = [
+            "AMLODIPINE-10-TAB",
+            "AMLODIPINE-5-TAB",
+            "SERIDON",
+        ]
+        manifest, _ = medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+            catalogue, REVISION_1
+        )
+
+        with patch.object(
+            frappe.local,
+            "flags",
+            SimpleNamespace(in_test=True),
+            create=True,
+        ), patch.object(
+            medicine_catalogue_sync, "frappe", fake_frappe
+        ), patch.object(
+            medicine_catalogue_sync,
+            "now_datetime",
+            return_value="2026-10-09 02:00:00",
+        ):
+            response = medicine_catalogue_sync.apply_tenant_projection_batch(
+                tenant_site="clinic.example.test",
+                control_site="control.example.test",
+                snapshot_manifest=manifest,
+                catalogue=catalogue,
+            )
+            database.commit()
+
+        self.assertEqual(response["status"], "success")
+        self.assertEqual(response["created_item_codes"], ["AMLODIPINE-5-TAB"])
+        self.assertEqual(response["skipped_item_codes"], ["SERIDON"])
+        self.assertEqual(response["conflicting_item_codes"], ["SERIDON"])
+        self.assertEqual(database.records["SERIDON"], manual_item)
+        self.assertEqual(
+            database.records["AMLODIPINE-5-TAB"].item_name,
+            "Amlodipine 5mg Tablet",
+        )
+        self.assertEqual(
+            {
+                row["item_code"]
+                for row in database.records["Amlodipine"].linked_items
+            },
+            {"AMLODIPINE-5-TAB", "AMLODIPINE-10-TAB"},
+        )
 
     def test_tenant_endpoint_rejects_unauthorized_user(self):
         fake_frappe = self._tenant_request_frappe(FakeProjectionDatabase(), user="someone@example.invalid")
@@ -959,9 +1648,54 @@ class TestCentralMedicineCatalogue(unittest.TestCase):
             request.kwargs["headers"]["Authorization"],
             "token key-value:secret-value",
         )
+        self.assertEqual(request.kwargs["timeout"], 20)
         self.assertTrue(request.kwargs["verify"])
         self.assertFalse(request.kwargs["allow_redirects"])
+        self.assertEqual(request.kwargs["json"]["products"], list(normalized))
         self.assertEqual(response["status"], "success")
+
+    def test_api_token_transport_sends_item_catalogue_to_existing_endpoint(self):
+        tenant = SimpleNamespace(site_name="clinic.example.test")
+        manifest, catalogue = (
+            medicine_catalogue_sync.create_medicine_item_snapshot_manifest(
+                medicine_item_catalogue(), REVISION_1
+            )
+        )
+        session = FakeHTTPTransportSession(
+            FakeHTTPResponse(
+                {
+                    "status": "success",
+                    "tenant_site": "clinic.example.test",
+                    "snapshot_manifest": manifest,
+                }
+            )
+        )
+        credentials = SimpleNamespace(
+            get_api_credentials=Mock(return_value=("key-value", "secret-value")),
+        )
+        transport = medicine_catalogue_sync.FrappeApiTokenTenantTransport(
+            credential_provider=credentials,
+            http_session=session,
+        )
+
+        with patch.object(
+            medicine_catalogue_sync,
+            "_tenant_sync_endpoint",
+            return_value=(tenant, "https://clinic.example.test/api/method/sync"),
+        ), patch.object(
+            medicine_catalogue_sync,
+            "configured_control_site",
+            return_value="control.example.test",
+        ):
+            transport.apply_projection_batch_atomically(
+                "clinic.example.test",
+                manifest,
+                catalogue,
+            )
+
+        payload = session.post.call_args.kwargs["json"]
+        self.assertEqual(payload["catalogue"], catalogue)
+        self.assertNotIn("products", payload)
 
     def test_control_transport_target_comes_from_tenant_registry(self):
         tenant = SimpleNamespace(

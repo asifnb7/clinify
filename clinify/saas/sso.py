@@ -58,6 +58,11 @@ def _control_url():
     return url
 
 
+def _control_root_url():
+    parsed = urlsplit(_control_url())
+    return f"{parsed.scheme}://{parsed.netloc}/"
+
+
 def _tenant_handoff_scheme(domain):
     return "http" if _local_development_enabled() and domain.endswith(".localhost") else "https"
 
@@ -80,6 +85,10 @@ def _is_control_site():
         return False
 
     return bool(configured) and (frappe.local.site or "").lower() == configured
+
+
+def extend_bootinfo(bootinfo):
+    bootinfo["clinify_is_control_site"] = _is_control_site()
 
 
 def _tenant_domain(domain):
@@ -305,3 +314,28 @@ def redeem_handoff(reference=None, site=None, domain=None):
         return {"site": tenant.site_name, "domain": tenant.domain, "aud": _tenant_audience(tenant), "user": tenant.administrator_email, "tenant_code": tenant.tenant_code}
     except Exception as exc:
         frappe.throw(str(exc), frappe.PermissionError)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def logout_to_control():
+    frappe.local.login_manager.logout()
+    frappe.db.commit()
+    return (
+        _control_root_url()
+        + "api/method/clinify.saas.sso.logout_control_and_redirect"
+    )
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET"])
+def logout_control_and_redirect():
+    if not _is_control_site():
+        frappe.throw(
+            "Control-site logout can only run on the Clinify Control site.",
+            frappe.PermissionError,
+        )
+
+    control_root = _control_root_url()
+    frappe.local.login_manager.logout()
+    frappe.db.commit()
+    frappe.local.response["type"] = "redirect"
+    frappe.local.response["location"] = control_root

@@ -99,6 +99,52 @@ def control_user(email=EMAIL, enabled=1, user_type="System User", name=None):
 
 
 class TestControlSiteAdministrator(unittest.TestCase):
+    def _provisioning_fixture(self, status):
+        events = []
+        tenant = SimpleNamespace(
+            name="TENANT-1",
+            tenant_name="Example Clinic",
+            tenant_code="EXAMPLE",
+            site_name="example.salniz.com",
+            domain=None,
+            administrator_name="Ada Lovelace",
+            administrator_email=EMAIL,
+            plan="TRIAL",
+            contact_person="",
+            registered_phone="",
+            registered_email="",
+            address_line_1="",
+            address_line_2="",
+            registered_city="",
+            registered_state="",
+            postal_code="",
+            registered_country="",
+            provisioning_status=status,
+            tenant_id=None,
+            save=lambda **_kwargs: events.append(
+                ("save", tenant.provisioning_status)
+            ),
+            reload=lambda: None,
+        )
+        fake = SimpleNamespace(
+            db=SimpleNamespace(
+                get_value=lambda *_args, **_kwargs: tenant,
+                commit=lambda: events.append(
+                    ("commit", tenant.provisioning_status)
+                ),
+            ),
+            get_doc=lambda *_args: tenant,
+        )
+        verification = {
+            "subscription": {
+                "name": "SUB-1",
+                "subscription_status": "Trial",
+                "end_date": "2099-01-01",
+                "start_date": "2026-01-01",
+            }
+        }
+        return tenant, fake, verification, events
+
     def _ensure(self, fake, tenant_name="TENANT-1", password="transient-secret"):
         tenant = SimpleNamespace(name=tenant_name)
         with patch.object(control_site_identity, "frappe", fake), patch.object(
@@ -204,43 +250,15 @@ class TestControlSiteAdministrator(unittest.TestCase):
         self.assertTrue(all(values["doctype"] == "User" for values in fake.created_user_values))
 
     def test_verifying_provisioning_retry_rechecks_control_identity(self):
-        tenant = SimpleNamespace(
-            name="TENANT-1",
-            tenant_name="Example Clinic",
-            tenant_code="EXAMPLE",
-            site_name="example.salniz.com",
-            domain="example.salniz.com",
-            administrator_name="Ada Lovelace",
-            administrator_email=EMAIL,
-            plan="TRIAL",
-            contact_person="",
-            registered_phone="",
-            registered_email="",
-            address_line_1="",
-            address_line_2="",
-            registered_city="",
-            registered_state="",
-            postal_code="",
-            registered_country="",
-            provisioning_status="Verifying",
-            tenant_id=None,
-            save=lambda **_kwargs: None,
+        tenant, fake, verification, events = self._provisioning_fixture(
+            "Verifying"
         )
-        fake = SimpleNamespace(
-            db=SimpleNamespace(
-                get_value=lambda *_args, **_kwargs: tenant,
-                commit=lambda: None,
-            ),
-            get_doc=lambda *_args: tenant,
-        )
-        verification = {
-            "subscription": {
-                "name": "SUB-1",
-                "subscription_status": "Trial",
-                "end_date": "2099-01-01",
-                "start_date": "2026-01-01",
-            }
-        }
+
+        def populate(target_tenant):
+            self.assertEqual(target_tenant, tenant.site_name)
+            self.assertEqual(events[-1], ("save", "Ready"))
+            return {"created": 4, "skipped": 1}
+
         with patch.object(orchestrator, "frappe", fake), patch.object(
             orchestrator, "validate_control_site_administrator"
         ) as validate, patch.object(
@@ -249,7 +267,11 @@ class TestControlSiteAdministrator(unittest.TestCase):
             orchestrator, "_verify_site", return_value=verification
         ), patch.object(orchestrator, "generate_tenant_id", return_value="C01EXA0126"), patch.object(
             orchestrator, "now_datetime", return_value="2026-01-01 00:00:00"
-        ):
+        ), patch.object(
+            orchestrator,
+            "_populate_tenant_medicine_catalogue",
+            side_effect=populate,
+        ) as populate_medicines:
             result = orchestrator.provision_tenant(
                 tenant_name=tenant.tenant_name,
                 tenant_code=tenant.tenant_code,
@@ -267,6 +289,105 @@ class TestControlSiteAdministrator(unittest.TestCase):
             admin_password="retry-transient-secret",
         )
         self.assertEqual(result["status"], "Ready")
+        self.assertEqual(tenant.domain, tenant.site_name)
+        populate_medicines.assert_called_once_with(tenant.site_name)
+        self.assertEqual(
+            events,
+            [("save", "Ready"), ("commit", "Ready")],
+        )
+
+    def test_normal_provisioning_populates_medicines_before_committing_ready(self):
+        tenant, fake, verification, events = self._provisioning_fixture(
+            "Creating Administrator"
+        )
+
+        def populate(target_tenant):
+            self.assertEqual(target_tenant, tenant.site_name)
+            self.assertEqual(events[-1], ("save", "Ready"))
+            return {"created": 4, "skipped": 1}
+
+        with patch.object(orchestrator, "frappe", fake), patch.object(
+            orchestrator, "_site_exists", return_value=True
+        ), patch.object(
+            orchestrator, "_configure_tenant_site_config"
+        ), patch.object(
+            orchestrator, "_run_bench", return_value="erpnext\nhealthcare\nclinify"
+        ), patch.object(
+            orchestrator, "_get_plan_definition", return_value={"plan_code": "TRIAL"}
+        ), patch.object(
+            orchestrator, "_bootstrap_site"
+        ), patch.object(
+            orchestrator, "validate_control_site_administrator"
+        ), patch.object(
+            orchestrator, "ensure_control_site_administrator"
+        ), patch.object(
+            orchestrator, "_verify_site", return_value=verification
+        ), patch.object(
+            orchestrator, "generate_tenant_id", return_value="C01EXA0126"
+        ), patch.object(
+            orchestrator, "now_datetime", return_value="2026-01-01 00:00:00"
+        ), patch.object(
+            orchestrator,
+            "_populate_tenant_medicine_catalogue",
+            side_effect=populate,
+        ) as populate_medicines:
+            result = orchestrator.provision_tenant(
+                tenant_name=tenant.tenant_name,
+                tenant_code=tenant.tenant_code,
+                site_name=tenant.site_name,
+                administrator_email=EMAIL,
+                plan=tenant.plan,
+                admin_password="retry-transient-secret",
+            )
+
+        populate_medicines.assert_called_once_with(tenant.site_name)
+        self.assertEqual(result["status"], "Ready")
+        self.assertEqual(tenant.domain, tenant.site_name)
+        self.assertEqual(events[-1], ("commit", "Ready"))
+
+    def test_medicine_catalogue_population_failure_does_not_complete_provisioning(self):
+        tenant, fake, verification, events = self._provisioning_fixture(
+            "Verifying"
+        )
+
+        with patch.object(orchestrator, "frappe", fake), patch.object(
+            orchestrator, "validate_control_site_administrator"
+        ), patch.object(
+            orchestrator, "ensure_control_site_administrator"
+        ), patch.object(
+            orchestrator, "_verify_site", return_value=verification
+        ), patch.object(
+            orchestrator, "generate_tenant_id", return_value="C01EXA0126"
+        ), patch.object(
+            orchestrator, "now_datetime", return_value="2026-01-01 00:00:00"
+        ), patch.object(
+            orchestrator,
+            "_populate_tenant_medicine_catalogue",
+            side_effect=RuntimeError("catalogue population failed"),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "catalogue population failed",
+            ):
+                orchestrator.provision_tenant(
+                    tenant_name=tenant.tenant_name,
+                    tenant_code=tenant.tenant_code,
+                    site_name=tenant.site_name,
+                    administrator_email=EMAIL,
+                    plan=tenant.plan,
+                    admin_password="retry-transient-secret",
+                )
+
+        self.assertEqual(tenant.provisioning_status, "Failed")
+        self.assertIn("catalogue population failed", tenant.provisioning_error)
+        self.assertEqual(
+            events,
+            [
+                ("save", "Ready"),
+                ("save", "Failed"),
+                ("commit", "Failed"),
+            ],
+        )
 
     def test_tenant_local_administrator_role_remains_tenant_only(self):
         self.assertEqual(tenant_bootstrap.CLINIFY_ADMIN_ROLE, "Clinify Clinic Admin")

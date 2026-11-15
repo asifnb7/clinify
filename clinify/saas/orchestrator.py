@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -282,6 +283,80 @@ def _verify_site(
             )
         ) from exc
 
+
+def _populate_tenant_medicine_catalogue(site_name, item_codes=None):
+    fields = [
+        "item_code",
+        "item_name",
+        "item_group",
+        "disabled",
+        "is_stock_item",
+        "is_sales_item",
+        "stock_uom",
+        "description",
+    ]
+    source_items = frappe.get_all(
+        "Item",
+        filters={"item_group": "Drug"},
+        fields=fields,
+        order_by="item_code asc",
+    )
+
+    if item_codes is not None:
+        requested_codes = set(item_codes)
+        source_items = [
+            item for item in source_items
+            if item["item_code"] in requested_codes
+        ]
+        found_codes = {item["item_code"] for item in source_items}
+        missing_codes = requested_codes - found_codes
+        if missing_codes:
+            raise ValueError(
+                "Central Drug Items not found for requested Item Codes."
+            )
+
+    if not source_items:
+        raise RuntimeError("Central medicine catalogue contains no Drug Items.")
+
+    created = 0
+    skipped = 0
+    method = "clinify.saas.medicine_catalogue_population.add_missing_drug_items"
+
+    for offset in range(0, len(source_items), 100):
+        batch = source_items[offset : offset + 100]
+        output = _run_bench(
+            [
+                "--site",
+                site_name,
+                "execute",
+                method,
+                "--args",
+                json.dumps([batch]),
+            ]
+        )
+        try:
+            result = json.loads(output)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "Tenant medicine catalogue population returned invalid JSON."
+            ) from exc
+
+        if (
+            not isinstance(result, dict)
+            or not isinstance(result.get("created"), int)
+            or not isinstance(result.get("skipped"), int)
+            or result["created"] + result["skipped"] != len(batch)
+        ):
+            raise RuntimeError(
+                "Tenant medicine catalogue population returned invalid counts."
+            )
+
+        created += result["created"]
+        skipped += result["skipped"]
+
+    return {"created": created, "skipped": skipped}
+
+
 def provision_tenant(
     tenant_name,
     tenant_code,
@@ -502,12 +577,14 @@ def provision_tenant(
                     subscription_start_date=verification["subscription"]["start_date"],
                 )
 
+            tenant.domain = validation["domain"] or validation["site_name"]
             tenant.provisioning_status = "Ready"
             tenant.provisioning_error = None
             tenant.provisioned_on = now_datetime()
             tenant.last_verified_on = now_datetime()
             tenant.save(ignore_permissions=True)
 
+            _populate_tenant_medicine_catalogue(tenant.site_name)
             frappe.db.commit()
 
             return {
@@ -615,12 +692,14 @@ def provision_tenant(
                 subscription_start_date=verification["subscription"]["start_date"],
             )
 
+        tenant.domain = validation["domain"] or validation["site_name"]
         tenant.provisioning_status = "Ready"
         tenant.provisioning_error = None
         tenant.provisioned_on = now_datetime()
         tenant.last_verified_on = now_datetime()
         tenant.save(ignore_permissions=True)
 
+        _populate_tenant_medicine_catalogue(tenant.site_name)
         frappe.db.commit()
 
         return {

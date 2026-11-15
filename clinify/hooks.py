@@ -62,6 +62,7 @@ app_include_css = [
 app_include_js = [
     "/assets/clinify/js/reception_route.js",
     "/assets/clinify/js/tenant_security.js",
+    "/assets/clinify/js/clinify_logout.js",
 ]
 
 
@@ -95,6 +96,10 @@ doc_events = {
 
 on_session_creation = [
     "clinify.saas.sso.on_session_creation",
+]
+
+extend_bootinfo = [
+    "clinify.saas.sso.extend_bootinfo",
 ]
 
 # -----------------------------------------------------------------------------

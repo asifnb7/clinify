@@ -2,7 +2,9 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+from frappe.auth import LoginManager
 
 from clinify.saas import sso
 
@@ -14,6 +16,14 @@ def tenant(**changes):
 
 
 class TestClinifySso(unittest.TestCase):
+    def test_bootinfo_marks_control_site_from_server_context(self):
+        bootinfo = {}
+
+        with patch.object(sso, "_is_control_site", return_value=True):
+            sso.extend_bootinfo(bootinfo)
+
+        self.assertIs(bootinfo["clinify_is_control_site"], True)
+
     def test_tenant_state_and_destination_are_rejected(self):
         with patch.object(sso, "today", return_value="2026-01-01"):
             for changes in ({"enabled": 0}, {"clinic_status": "Inactive"}, {"provisioning_status": "Pending"}, {"subscription_status": "Expired"}, {"subscription_end_date": None}, {"domain": "evil.example"}, {"site_name": "other.salniz.com"}):
@@ -44,6 +54,125 @@ class TestClinifySso(unittest.TestCase):
                 sso._control_url()
         with self.assertRaises(RuntimeError):
             sso._tenant_domain("evil.example")
+
+    def test_control_root_url_uses_configured_origin_only(self):
+        for settings, expected in (
+            (
+                {"CLINIFY_CONTROL_URL": "https://clinify.salniz.com/nested/path?x=1#fragment"},
+                "https://clinify.salniz.com/",
+            ),
+            (
+                {
+                    "CLINIFY_CONTROL_URL": "http://clinify.localhost/login",
+                    "CLINIFY_SSO_LOCAL_DEVELOPMENT": "true",
+                },
+                "http://clinify.localhost/",
+            ),
+        ):
+            with self.subTest(settings=settings), patch.object(
+                sso, "_setting", side_effect=settings.get
+            ):
+                self.assertEqual(sso._control_root_url(), expected)
+
+    def test_logout_to_control_terminates_local_session_and_uses_control_root(self):
+        database = SimpleNamespace(commit=Mock())
+        local = SimpleNamespace(
+            login_manager=LoginManager.__new__(LoginManager),
+            session=SimpleNamespace(user="admin@example.invalid", sid="tenant-session"),
+            request=object(),
+        )
+
+        with patch.object(sso.frappe, "local", local), patch.object(
+            sso.frappe, "session", local.session
+        ), patch.object(
+            sso.frappe, "request", local.request
+        ), patch.object(
+            sso.frappe, "db", database
+        ), patch("frappe.auth.delete_session") as delete_session, patch.object(
+            LoginManager, "run_trigger"
+        ), patch.object(
+            LoginManager, "clear_cookies"
+        ) as clear_cookies, patch.object(
+            LoginManager, "login_as_guest"
+        ) as login_as_guest, patch.object(
+            sso,
+            "_control_url",
+            return_value="https://clinify.salniz.com/tenant-path",
+        ):
+            destination = sso.logout_to_control()
+
+        delete_session.assert_called_once_with(
+            "tenant-session",
+            user="admin@example.invalid",
+            reason="User Manually Logged Out",
+        )
+        clear_cookies.assert_called_once_with()
+        login_as_guest.assert_called_once_with()
+        database.commit.assert_called_once_with()
+        self.assertEqual(
+            destination,
+            "https://clinify.salniz.com/api/method/"
+            "clinify.saas.sso.logout_control_and_redirect",
+        )
+        self.assertNotIn("al-treat.localhost", destination)
+
+    def test_logout_to_control_rejects_client_redirect_arguments(self):
+        with self.assertRaises(TypeError):
+            sso.logout_to_control(redirect_to="https://attacker.example/")
+
+    def test_control_logout_terminates_current_session_then_redirects_to_root(self):
+        events = []
+        database = SimpleNamespace(commit=lambda: events.append("commit"))
+        local = SimpleNamespace(
+            login_manager=LoginManager.__new__(LoginManager),
+            session=SimpleNamespace(user="admin@example.invalid", sid="control-session"),
+            request=object(),
+            response={},
+        )
+
+        with patch.object(sso.frappe, "local", local), patch.object(
+            sso.frappe, "session", local.session
+        ), patch.object(
+            sso.frappe, "request", local.request
+        ), patch.object(
+            sso.frappe, "db", database
+        ), patch("frappe.auth.delete_session") as delete_session, patch.object(
+            LoginManager, "run_trigger"
+        ), patch.object(
+            LoginManager, "clear_cookies"
+        ), patch.object(
+            LoginManager, "login_as_guest"
+        ), patch.object(
+            sso, "_is_control_site", return_value=True
+        ), patch.object(
+            sso, "_control_root_url", return_value="http://clinify.localhost/"
+        ):
+            sso.logout_control_and_redirect()
+
+        delete_session.assert_called_once_with(
+            "control-session",
+            user="admin@example.invalid",
+            reason="User Manually Logged Out",
+        )
+        self.assertEqual(events, ["commit"])
+        self.assertEqual(local.response["type"], "redirect")
+        self.assertEqual(local.response["location"], "http://clinify.localhost/")
+
+    def test_control_logout_endpoint_rejects_tenant_site(self):
+        login_manager = SimpleNamespace(logout=Mock())
+        fake_frappe = SimpleNamespace(
+            PermissionError=PermissionError,
+            throw=Mock(side_effect=PermissionError),
+            local=SimpleNamespace(login_manager=login_manager),
+        )
+
+        with patch.object(sso, "frappe", fake_frappe), patch.object(
+            sso, "_is_control_site", return_value=False
+        ):
+            with self.assertRaises(PermissionError):
+                sso.logout_control_and_redirect()
+
+        login_manager.logout.assert_not_called()
 
     def test_local_development_allows_localhost_http_only(self):
         values = {
