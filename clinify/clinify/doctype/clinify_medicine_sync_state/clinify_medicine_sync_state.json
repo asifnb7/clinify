@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "allow_import": 0,
+ "allow_rename": 0,
+ "autoname": "field:tenant_site",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tenant_site",
+  "last_attempted_at",
+  "last_attempted_revision",
+    "last_attempted_digest",
+  "last_attempt_status",
+  "last_error_code",
+  "last_successful_at",
+  "last_successful_revision",
+    "last_successful_digest",
+  "last_created_count",
+  "last_updated_count",
+  "last_skipped_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "tenant_site",
+   "fieldtype": "Data",
+   "label": "Tenant Site",
+   "reqd": 1,
+   "unique": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "last_attempted_at",
+   "fieldtype": "Datetime",
+   "label": "Last Attempted At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_attempted_revision",
+   "fieldtype": "Data",
+   "label": "Last Attempted Revision",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+    {
+     "fieldname": "last_attempted_digest",
+     "fieldtype": "Data",
+     "label": "Last Attempted Snapshot Digest",
+     "read_only": 1
+    },
+  {
+   "fieldname": "last_attempt_status",
+   "fieldtype": "Select",
+   "label": "Last Attempt Status",
+    "options": "Not Attempted\nIn Progress\nSucceeded\nFailed",
+   "default": "Not Attempted",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "last_error_code",
+   "fieldtype": "Data",
+   "label": "Last Error Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_successful_at",
+   "fieldtype": "Datetime",
+   "label": "Last Successful At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_successful_revision",
+   "fieldtype": "Data",
+   "label": "Last Successful Revision",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+    {
+     "fieldname": "last_successful_digest",
+     "fieldtype": "Data",
+     "label": "Last Successful Snapshot Digest",
+     "read_only": 1
+    },
+  {
+   "fieldname": "last_created_count",
+   "fieldtype": "Int",
+   "label": "Last Created Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_updated_count",
+   "fieldtype": "Int",
+   "label": "Last Updated Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_skipped_count",
+   "fieldtype": "Int",
+   "label": "Last Skipped Count",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "links": [],
+ "module": "Clinify",
+ "name": "Clinify Medicine Sync State",
+ "naming_rule": "By fieldname",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager"
+  }
+ ],
+ "search_fields": "tenant_site",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

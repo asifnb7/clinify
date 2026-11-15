@@ -5,7 +5,7 @@ import os
 import re
 from collections.abc import Mapping
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -67,6 +67,28 @@ _PROJECTION_FIELDS = (
     "source_updated_at",
     "is_active",
 )
+_MEDICINE_ITEM_FIELDS = (
+    "item_name",
+    "item_group",
+    "disabled",
+    "is_stock_item",
+    "is_sales_item",
+    "stock_uom",
+    "description",
+)
+_MEDICATION_FIELDS = (
+    "generic_name",
+    "medication_class",
+    "strength",
+    "strength_uom",
+    "dosage_form",
+    "disabled",
+    "is_combination",
+    "default_prescription_dosage",
+    "default_prescription_duration",
+    "price_list",
+)
+_MEDICINE_ITEM_SYNC_BATCH_SIZE = 100
 
 
 class TenantProjectionTransport(Protocol):
@@ -158,8 +180,22 @@ class FrappeApiTokenTenantTransport:
         self.credential_provider = (
             credential_provider or EnvironmentTenantSyncCredentialProvider()
         )
-        self.http_session = http_session or requests
+        self.http_session = (
+            http_session if http_session is not None else requests.Session()
+        )
         self.timeout = timeout
+        self._closed = False
+
+    def close(self):
+        if not self._closed:
+            self._closed = True
+            self.http_session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def apply_projection_batch_atomically(
         self,
@@ -172,18 +208,25 @@ class FrappeApiTokenTenantTransport:
         if not api_key or not api_secret:
             raise RuntimeError("Tenant catalogue credentials are not configured.")
 
+        payload = {
+            "tenant_site": tenant.site_name,
+            "control_site": configured_control_site(),
+            "snapshot_manifest": dict(snapshot_manifest),
+        }
+        if isinstance(products, Mapping) and products.get("catalogue_type") == (
+            "drug_item_catalogue_v1"
+        ):
+            payload["catalogue"] = dict(products)
+        else:
+            payload["products"] = [dict(product) for product in products]
+
         response = self.http_session.post(
             endpoint,
             headers={
                 "Authorization": f"token {api_key}:{api_secret}",
                 "Accept": "application/json",
             },
-            json={
-                "tenant_site": tenant.site_name,
-                "control_site": configured_control_site(),
-                "snapshot_manifest": dict(snapshot_manifest),
-                "products": [dict(product) for product in products],
-            },
+            json=payload,
             timeout=self.timeout,
             verify=True,
             allow_redirects=False,
@@ -682,6 +725,749 @@ def validate_snapshot_manifest(manifest, records):
     return expected, products
 
 
+def build_central_medicine_item_catalogue():
+    """Build the tenant payload from the control site's existing Drug Items."""
+    source_items = frappe.get_all(
+        "Item",
+        filters={"item_group": "Drug"},
+        fields=["name", *_MEDICINE_ITEM_FIELDS],
+        order_by="name asc",
+    )
+    if not source_items:
+        raise ValueError("The central Drug Item catalogue is empty.")
+
+    item_codes = [item.name for item in source_items]
+    source_links = frappe.get_all(
+        "Medication Linked Item",
+        filters={"item_code": ["in", item_codes]},
+        fields=[
+            "parent",
+            "item_code",
+            "item",
+            "item_group",
+            "stock_uom",
+            "is_billable",
+            "idx",
+        ],
+        order_by="parent asc, idx asc",
+    )
+
+    medication_names = {
+        row.parent for row in source_links if row.get("parent")
+    }
+    medications = {}
+    ingredients_by_parent = {}
+    pending_names = set(medication_names)
+    while pending_names:
+        requested_names = sorted(pending_names - set(medications))
+        if not requested_names:
+            break
+        rows = frappe.get_all(
+            "Medication",
+            filters={"name": ["in", requested_names]},
+            fields=["name", *_MEDICATION_FIELDS],
+            order_by="name asc",
+        )
+        if {row.name for row in rows} != set(requested_names):
+            raise ValueError("A central linked Medication record is missing.")
+        medications.update({row.name: row for row in rows})
+        ingredients = frappe.get_all(
+            "Medication Ingredient",
+            filters={"parent": ["in", requested_names]},
+            fields=["parent", "medication", "strength", "strength_uom", "idx"],
+            order_by="parent asc, idx asc",
+        )
+        for ingredient in ingredients:
+            ingredients_by_parent.setdefault(ingredient.parent, []).append(
+                ingredient
+            )
+            if ingredient.medication:
+                pending_names.add(ingredient.medication)
+
+    linked_items_by_parent = {}
+    for row in source_links:
+        linked_items_by_parent.setdefault(row.parent, []).append(row)
+
+    linked_uoms = {
+        item.stock_uom for item in source_items if item.stock_uom
+    }
+    linked_uoms.update(
+        row.stock_uom for row in source_links if row.stock_uom
+    )
+    linked_uoms.update(
+        row.strength_uom
+        for row in medications.values()
+        if row.strength_uom
+    )
+    linked_uoms.update(
+        row.strength_uom
+        for rows in ingredients_by_parent.values()
+        for row in rows
+        if row.strength_uom
+    )
+    uoms = frappe.get_all(
+        "UOM",
+        filters={"name": ["in", sorted(linked_uoms)]},
+        fields=["name", "uom_name", "must_be_whole_number", "enabled"],
+        order_by="name asc",
+    )
+    if {row.name for row in uoms} != linked_uoms:
+        raise ValueError("A central medicine UOM reference is missing.")
+
+    class_names = {
+        row.medication_class
+        for row in medications.values()
+        if row.medication_class
+    }
+    medication_classes = frappe.get_all(
+        "Medication Class",
+        filters={"name": ["in", sorted(class_names)]},
+        fields=["name", "medication_class"],
+        order_by="name asc",
+    )
+    if {row.name for row in medication_classes} != class_names:
+        raise ValueError("A central Medication Class reference is missing.")
+
+    dosage_form_names = {
+        row.dosage_form
+        for row in medications.values()
+        if row.dosage_form
+    }
+    dosage_forms = frappe.get_all(
+        "Dosage Form",
+        filters={"name": ["in", sorted(dosage_form_names)]},
+        fields=["name", "dosage_form"],
+        order_by="name asc",
+    )
+    if {row.name for row in dosage_forms} != dosage_form_names:
+        raise ValueError("A central Dosage Form reference is missing.")
+
+    dosage_names = {
+        row.default_prescription_dosage
+        for row in medications.values()
+        if row.default_prescription_dosage
+    }
+    dosages = frappe.get_all(
+        "Prescription Dosage",
+        filters={"name": ["in", sorted(dosage_names)]},
+        fields=["name", "dosage"],
+        order_by="name asc",
+    )
+    if {row.name for row in dosages} != dosage_names:
+        raise ValueError("A central Prescription Dosage reference is missing.")
+
+    duration_names = {
+        row.default_prescription_duration
+        for row in medications.values()
+        if row.default_prescription_duration
+    }
+    durations = frappe.get_all(
+        "Prescription Duration",
+        filters={"name": ["in", sorted(duration_names)]},
+        fields=["name", "number", "period"],
+        order_by="name asc",
+    )
+    if {row.name for row in durations} != duration_names:
+        raise ValueError("A central Prescription Duration reference is missing.")
+
+    catalogue = {
+        "catalogue_type": "drug_item_catalogue_v1",
+        "items": [
+            {
+                "item_code": row.name,
+                **{fieldname: row.get(fieldname) for fieldname in _MEDICINE_ITEM_FIELDS},
+            }
+            for row in source_items
+        ],
+        "medications": [
+            {
+                "name": name,
+                **{
+                    fieldname: row.get(fieldname)
+                    for fieldname in _MEDICATION_FIELDS
+                },
+                "linked_items": [
+                    {
+                        "item_code": link.item_code,
+                        "item": link.item,
+                        "item_group": link.item_group,
+                        "stock_uom": link.stock_uom,
+                        "is_billable": link.is_billable,
+                    }
+                    for link in linked_items_by_parent.get(name, [])
+                ],
+                "combinations": [
+                    {
+                        "medication": ingredient.medication,
+                        "strength": ingredient.strength,
+                        "strength_uom": ingredient.strength_uom,
+                    }
+                    for ingredient in ingredients_by_parent.get(name, [])
+                ],
+            }
+            for name, row in sorted(medications.items())
+        ],
+        "medication_classes": [
+            {
+                "name": row.name,
+                "medication_class": row.medication_class,
+            }
+            for row in medication_classes
+        ],
+        "dosage_forms": [
+            {"name": row.name, "dosage_form": row.dosage_form}
+            for row in dosage_forms
+        ],
+        "uoms": [
+            {
+                "name": row.name,
+                "uom_name": row.uom_name,
+                "must_be_whole_number": row.must_be_whole_number,
+                "enabled": row.enabled,
+            }
+            for row in uoms
+        ],
+        "prescription_dosages": [
+            {"name": row.name, "dosage": row.dosage}
+            for row in dosages
+        ],
+        "prescription_durations": [
+            {
+                "name": row.name,
+                "number": row.number,
+                "period": row.period,
+            }
+            for row in durations
+        ],
+    }
+    return normalize_medicine_item_catalogue(catalogue)
+
+
+def _catalogue_text(value, fieldname, required=False, maximum=2000):
+    if value is None:
+        text = ""
+    elif isinstance(value, str):
+        text = value
+    else:
+        raise ValueError(f"Medicine catalogue {fieldname} must be text.")
+    if (required and not text.strip()) or len(text) > maximum:
+        raise ValueError(f"Medicine catalogue {fieldname} is invalid.")
+    return text
+
+
+def _catalogue_flag(value, fieldname):
+    if value in (True, 1, "1"):
+        return 1
+    if value in (False, 0, "0"):
+        return 0
+    raise ValueError(f"Medicine catalogue {fieldname} is invalid.")
+
+
+def _catalogue_decimal(value, fieldname):
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError(f"Medicine catalogue {fieldname} is invalid.") from None
+    if not number.is_finite() or number < 0:
+        raise ValueError(f"Medicine catalogue {fieldname} is invalid.")
+    return format(number.normalize(), "f")
+
+
+def normalize_medicine_item_catalogue(catalogue):
+    """Validate and canonicalize a complete Item/Medication projection."""
+    required_keys = {
+        "catalogue_type",
+        "items",
+        "medications",
+        "medication_classes",
+        "dosage_forms",
+        "uoms",
+        "prescription_dosages",
+        "prescription_durations",
+    }
+    if (
+        not isinstance(catalogue, Mapping)
+        or not required_keys.issubset(catalogue)
+        or set(catalogue).difference(required_keys | {"source_item_codes"})
+    ):
+        raise ValueError("Medicine Item catalogue is malformed.")
+    if catalogue["catalogue_type"] != "drug_item_catalogue_v1":
+        raise ValueError("Medicine Item catalogue version is unsupported.")
+
+    items = []
+    item_codes = set()
+    for record in catalogue["items"]:
+        if not isinstance(record, Mapping):
+            raise ValueError("Medicine Item catalogue contains an invalid Item.")
+        item_code = _catalogue_text(
+            record.get("item_code"), "Item code", required=True, maximum=140
+        )
+        if item_code in item_codes:
+            raise ValueError("Medicine Item catalogue repeats an Item code.")
+        item_codes.add(item_code)
+        item_group = _catalogue_text(
+            record.get("item_group"), "Item group", required=True, maximum=140
+        )
+        if item_group != "Drug":
+            raise ValueError("Medicine Item catalogue contains a non-Drug Item.")
+        items.append(
+            {
+                "item_code": item_code,
+                "item_name": _catalogue_text(
+                    record.get("item_name"), "Item name", required=True, maximum=140
+                ),
+                "item_group": item_group,
+                "disabled": _catalogue_flag(record.get("disabled"), "Item disabled"),
+                "is_stock_item": _catalogue_flag(
+                    record.get("is_stock_item"), "Item stock state"
+                ),
+                "is_sales_item": _catalogue_flag(
+                    record.get("is_sales_item"), "Item sales state"
+                ),
+                "stock_uom": _catalogue_text(
+                    record.get("stock_uom"), "Item stock UOM", required=True, maximum=140
+                ),
+                "description": _catalogue_text(
+                    record.get("description"), "Item description"
+                ),
+            }
+        )
+    if not items:
+        raise ValueError("Medicine Item catalogue must not be empty.")
+    source_item_codes = catalogue.get("source_item_codes", sorted(item_codes))
+    if not isinstance(source_item_codes, (list, tuple)):
+        raise ValueError("Medicine Item catalogue source Item codes are malformed.")
+    normalized_source_item_codes = []
+    for value in source_item_codes:
+        item_code = _catalogue_text(
+            value, "source Item code", required=True, maximum=140
+        )
+        if item_code in normalized_source_item_codes:
+            raise ValueError("Medicine Item catalogue repeats a source Item code.")
+        normalized_source_item_codes.append(item_code)
+    if not item_codes.issubset(normalized_source_item_codes):
+        raise ValueError("Medicine Item catalogue omits a batch Item code.")
+    normalized_source_item_codes.sort()
+
+    classes = _normalize_reference_rows(
+        catalogue["medication_classes"], "medication_class"
+    )
+    dosage_forms = _normalize_reference_rows(
+        catalogue["dosage_forms"], "dosage_form"
+    )
+    class_names = {row["name"] for row in classes}
+    dosage_form_names = {row["name"] for row in dosage_forms}
+
+    uoms = []
+    uom_names = set()
+    for row in catalogue["uoms"]:
+        if not isinstance(row, Mapping):
+            raise ValueError("Medicine Item catalogue contains an invalid UOM.")
+        name = _catalogue_text(row.get("name"), "UOM name", required=True, maximum=140)
+        if name in uom_names:
+            raise ValueError("Medicine Item catalogue repeats a UOM.")
+        uom_names.add(name)
+        uoms.append(
+            {
+                "name": name,
+                "uom_name": _catalogue_text(
+                    row.get("uom_name"), "UOM name", required=True, maximum=140
+                ),
+                "must_be_whole_number": _catalogue_flag(
+                    row.get("must_be_whole_number"), "UOM whole-number state"
+                ),
+                "enabled": _catalogue_flag(row.get("enabled"), "UOM enabled state"),
+            }
+        )
+
+    dosages = _normalize_reference_rows(catalogue["prescription_dosages"], "dosage")
+    durations = []
+    duration_names = set()
+    for row in catalogue["prescription_durations"]:
+        if not isinstance(row, Mapping):
+            raise ValueError("Medicine Item catalogue contains an invalid duration.")
+        name = _catalogue_text(
+            row.get("name"), "duration name", required=True, maximum=140
+        )
+        if name in duration_names:
+            raise ValueError("Medicine Item catalogue repeats a duration.")
+        duration_names.add(name)
+        number = _catalogue_decimal(row.get("number"), "duration number")
+        period = _catalogue_text(
+            row.get("period"), "duration period", required=True, maximum=140
+        )
+        if name != f"{number} {period}":
+            raise ValueError("Medicine Item catalogue duration name is inconsistent.")
+        durations.append({"name": name, "number": number, "period": period})
+
+    medication_names = set()
+    medications = []
+    for record in catalogue["medications"]:
+        if not isinstance(record, Mapping):
+            raise ValueError("Medicine Item catalogue contains an invalid Medication.")
+        name = _catalogue_text(
+            record.get("name"), "Medication name", required=True, maximum=140
+        )
+        generic_name = _catalogue_text(
+            record.get("generic_name"),
+            "Medication generic name",
+            required=True,
+            maximum=140,
+        )
+        if name != generic_name or name in medication_names:
+            raise ValueError("Medicine Item catalogue has an inconsistent Medication name.")
+        medication_names.add(name)
+        medication_class = _catalogue_text(
+            record.get("medication_class"),
+            "Medication class",
+            required=True,
+            maximum=140,
+        )
+        strength_uom = _catalogue_text(
+            record.get("strength_uom"), "Medication strength UOM", required=True, maximum=140
+        )
+        dosage_form = _catalogue_text(
+            record.get("dosage_form"), "Medication dosage form", required=True, maximum=140
+        )
+        if medication_class not in class_names or dosage_form not in dosage_form_names:
+            raise ValueError("Medicine Item catalogue has an unresolved Medication reference.")
+        linked_items = []
+        linked_codes = set()
+        for linked in record["linked_items"]:
+            if not isinstance(linked, Mapping):
+                raise ValueError("Medicine Item catalogue contains an invalid Item link.")
+            item_code = _catalogue_text(
+                linked.get("item_code"), "linked Item code", required=True, maximum=140
+            )
+            if item_code not in item_codes or item_code in linked_codes:
+                raise ValueError("Medicine Item catalogue has an invalid Item relationship.")
+            linked_codes.add(item_code)
+            if linked.get("item") != item_code:
+                raise ValueError("Medicine Item catalogue has an inconsistent Item link.")
+            linked_items.append(
+                {
+                    "item_code": item_code,
+                    "item": item_code,
+                    "item_group": _catalogue_text(
+                        linked.get("item_group"),
+                        "linked Item group",
+                        required=True,
+                        maximum=140,
+                    ),
+                    "stock_uom": _catalogue_text(
+                        linked.get("stock_uom"),
+                        "linked Item stock UOM",
+                        required=True,
+                        maximum=140,
+                    ),
+                    "is_billable": _catalogue_flag(
+                        linked.get("is_billable"), "linked Item billable state"
+                    ),
+                }
+            )
+        combinations = []
+        for ingredient in record["combinations"]:
+            if not isinstance(ingredient, Mapping):
+                raise ValueError("Medicine Item catalogue contains an invalid ingredient.")
+            combinations.append(
+                {
+                    "medication": _catalogue_text(
+                        ingredient.get("medication"),
+                        "combination Medication",
+                        required=True,
+                        maximum=140,
+                    ),
+                    "strength": _catalogue_decimal(
+                        ingredient.get("strength"), "ingredient strength"
+                    ),
+                    "strength_uom": _catalogue_text(
+                        ingredient.get("strength_uom"),
+                        "ingredient strength UOM",
+                        required=True,
+                        maximum=140,
+                    ),
+                }
+            )
+        medications.append(
+            {
+                "name": name,
+                "generic_name": generic_name,
+                "medication_class": medication_class,
+                "strength": _catalogue_decimal(record.get("strength"), "Medication strength"),
+                "strength_uom": strength_uom,
+                "dosage_form": dosage_form,
+                "disabled": _catalogue_flag(
+                    record.get("disabled"), "Medication disabled state"
+                ),
+                "is_combination": _catalogue_flag(
+                    record.get("is_combination"), "Medication combination state"
+                ),
+                "default_prescription_dosage": _catalogue_text(
+                    record.get("default_prescription_dosage"),
+                    "default prescription dosage",
+                    maximum=140,
+                ),
+                "default_prescription_duration": _catalogue_text(
+                    record.get("default_prescription_duration"),
+                    "default prescription duration",
+                    maximum=140,
+                ),
+                "price_list": _catalogue_text(
+                    record.get("price_list"), "Medication price list", maximum=140
+                ),
+                "linked_items": linked_items,
+                "combinations": combinations,
+            }
+        )
+    if any(row["medication"] not in medication_names for record in medications for row in record["combinations"]):
+        raise ValueError("Medicine Item catalogue has an unresolved combination ingredient.")
+
+    for item in items:
+        if item["stock_uom"] not in uom_names:
+            raise ValueError("Medicine Item catalogue has an unresolved Item UOM.")
+    for medication in medications:
+        if medication["strength_uom"] not in uom_names:
+            raise ValueError("Medicine Item catalogue has an unresolved Medication UOM.")
+        if medication["default_prescription_dosage"] not in {
+            row["name"] for row in dosages
+        }:
+            raise ValueError("Medicine Item catalogue has an unresolved prescription dosage.")
+        if medication["default_prescription_duration"] not in duration_names:
+            raise ValueError("Medicine Item catalogue has an unresolved prescription duration.")
+        for link in medication["linked_items"]:
+            if link["stock_uom"] not in uom_names:
+                raise ValueError("Medicine Item catalogue has an unresolved linked Item UOM.")
+        for ingredient in medication["combinations"]:
+            if ingredient["strength_uom"] not in uom_names:
+                raise ValueError("Medicine Item catalogue has an unresolved ingredient UOM.")
+
+    return {
+        "catalogue_type": "drug_item_catalogue_v1",
+        "items": sorted(items, key=lambda row: row["item_code"]),
+        "source_item_codes": normalized_source_item_codes,
+        "medications": sorted(medications, key=lambda row: row["name"]),
+        "medication_classes": sorted(classes, key=lambda row: row["name"]),
+        "dosage_forms": sorted(dosage_forms, key=lambda row: row["name"]),
+        "uoms": sorted(uoms, key=lambda row: row["name"]),
+        "prescription_dosages": sorted(dosages, key=lambda row: row["name"]),
+        "prescription_durations": sorted(durations, key=lambda row: row["name"]),
+    }
+
+
+def _normalize_reference_rows(records, fieldname):
+    if not isinstance(records, (list, tuple)):
+        raise ValueError("Medicine Item catalogue reference list is malformed.")
+    rows = []
+    seen = set()
+    for record in records:
+        if not isinstance(record, Mapping):
+            raise ValueError("Medicine Item catalogue reference is malformed.")
+        name = _catalogue_text(
+            record.get("name"), "reference name", required=True, maximum=140
+        )
+        value = _catalogue_text(
+            record.get(fieldname), fieldname, required=True, maximum=140
+        )
+        if name != value or name in seen:
+            raise ValueError("Medicine Item catalogue reference is inconsistent.")
+        seen.add(name)
+        rows.append({"name": name, fieldname: value})
+    return rows
+
+
+def create_medicine_item_snapshot_manifest(catalogue, revision):
+    """Create a deterministic digest for the complete Item/Medication payload."""
+    revision = validate_catalogue_revision(revision)
+    normalized = normalize_medicine_item_catalogue(catalogue)
+    canonical_payload = json.dumps(
+        normalized,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    manifest = {
+        "revision": revision,
+        "item_count": len(normalized["items"]),
+        "digest": hashlib.sha256(canonical_payload).hexdigest(),
+    }
+    return manifest, normalized
+
+
+def validate_medicine_item_snapshot(manifest, catalogue):
+    if isinstance(manifest, str):
+        try:
+            manifest = json.loads(manifest)
+        except (TypeError, ValueError):
+            raise ValueError("Medicine Item snapshot manifest is malformed.") from None
+    if not isinstance(manifest, Mapping) or set(manifest) != {
+        "revision",
+        "item_count",
+        "digest",
+    }:
+        raise ValueError("Medicine Item snapshot manifest is malformed.")
+    expected, normalized = create_medicine_item_snapshot_manifest(
+        catalogue, manifest["revision"]
+    )
+    item_count = manifest["item_count"]
+    digest = manifest["digest"]
+    if (
+        isinstance(item_count, bool)
+        or not isinstance(item_count, int)
+        or item_count != expected["item_count"]
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        or digest != expected["digest"]
+    ):
+        raise ValueError("Medicine Item manifest does not match the complete batch.")
+    return expected, normalized
+
+
+def _medicine_item_catalogue_batches(catalogue, batch_size):
+    """Split a normalized Item catalogue while keeping each batch's Medication graph valid."""
+    items = catalogue["items"]
+    medications_by_name = {
+        row["name"]: row for row in catalogue["medications"]
+    }
+    for offset in range(0, len(items), batch_size):
+        batch_items = items[offset : offset + batch_size]
+        batch_codes = {row["item_code"] for row in batch_items}
+        medication_names = {
+            medication["name"]
+            for medication in catalogue["medications"]
+            if any(
+                link["item_code"] in batch_codes
+                for link in medication["linked_items"]
+            )
+        }
+        pending_names = list(medication_names)
+        while pending_names:
+            medication = medications_by_name[pending_names.pop()]
+            for ingredient in medication["combinations"]:
+                ingredient_name = ingredient["medication"]
+                if ingredient_name not in medication_names:
+                    medication_names.add(ingredient_name)
+                    pending_names.append(ingredient_name)
+
+        batch_medications = []
+        for name in sorted(medication_names):
+            medication = dict(medications_by_name[name])
+            medication["linked_items"] = [
+                link
+                for link in medication["linked_items"]
+                if link["item_code"] in batch_codes
+            ]
+            batch_medications.append(medication)
+
+        class_names = {
+            row["medication_class"] for row in batch_medications
+        }
+        dosage_form_names = {
+            row["dosage_form"] for row in batch_medications
+        }
+        dosage_names = {
+            row["default_prescription_dosage"]
+            for row in batch_medications
+        }
+        duration_names = {
+            row["default_prescription_duration"]
+            for row in batch_medications
+        }
+        uom_names = {
+            row["stock_uom"] for row in batch_items
+        }
+        for medication in batch_medications:
+            uom_names.add(medication["strength_uom"])
+            uom_names.update(
+                link["stock_uom"] for link in medication["linked_items"]
+            )
+            uom_names.update(
+                ingredient["strength_uom"]
+                for ingredient in medication["combinations"]
+            )
+
+        yield {
+            "catalogue_type": catalogue["catalogue_type"],
+            "items": batch_items,
+            "source_item_codes": catalogue["source_item_codes"],
+            "medications": batch_medications,
+            "medication_classes": [
+                row
+                for row in catalogue["medication_classes"]
+                if row["name"] in class_names
+            ],
+            "dosage_forms": [
+                row
+                for row in catalogue["dosage_forms"]
+                if row["name"] in dosage_form_names
+            ],
+            "uoms": [
+                row for row in catalogue["uoms"] if row["name"] in uom_names
+            ],
+            "prescription_dosages": [
+                row
+                for row in catalogue["prescription_dosages"]
+                if row["name"] in dosage_names
+            ],
+            "prescription_durations": [
+                row
+                for row in catalogue["prescription_durations"]
+                if row["name"] in duration_names
+            ],
+        }
+
+
+def _medicine_item_codes_for_conflicting_medications(
+    catalogue, conflicting_medications
+):
+    if (
+        not isinstance(conflicting_medications, (list, tuple))
+        or not conflicting_medications
+    ):
+        raise ValueError("Conflicting Medication names are invalid.")
+
+    medications_by_name = {
+        row["name"]: row for row in catalogue["medications"]
+    }
+    affected_medications = set()
+    for name in conflicting_medications:
+        if (
+            not isinstance(name, str)
+            or not name
+            or name != name.strip()
+            or name not in medications_by_name
+        ):
+            raise ValueError("Conflicting Medication cannot be mapped safely.")
+        affected_medications.add(name)
+
+    changed = True
+    while changed:
+        changed = False
+        for medication in catalogue["medications"]:
+            if medication["name"] in affected_medications:
+                continue
+            if any(
+                ingredient["medication"] in affected_medications
+                for ingredient in medication["combinations"]
+            ):
+                affected_medications.add(medication["name"])
+                changed = True
+
+    affected_item_codes = {
+        linked_item["item_code"]
+        for name in affected_medications
+        for linked_item in medications_by_name[name]["linked_items"]
+    }
+    batch_item_codes = {
+        item["item_code"] for item in catalogue["items"]
+    }
+    if (
+        not affected_item_codes
+        or not affected_item_codes.issubset(batch_item_codes)
+    ):
+        raise ValueError("Conflicting Medication has no safely mapped Items.")
+    return affected_item_codes
+
+
 def _safe_sync_target(tenant_site, control_site):
     tenant_site = _canonical_tenant_site(tenant_site)
     if tenant_site == control_site:
@@ -764,10 +1550,28 @@ def apply_tenant_projection_batch(
     control_site=None,
     snapshot_manifest=None,
     products=None,
+    catalogue=None,
 ):
-    """Authenticated tenant endpoint applying one validated batch atomically."""
+    """Apply one authenticated medicine batch atomically on its tenant."""
     tenant_site = str(tenant_site or "").strip().lower()
     _require_tenant_sync_request(tenant_site, control_site)
+
+    if isinstance(catalogue, str):
+        try:
+            catalogue = json.loads(catalogue)
+        except (TypeError, ValueError):
+            frappe.throw("Medicine Item catalogue batch is malformed.")
+    if catalogue is not None:
+        try:
+            manifest, normalized = validate_medicine_item_snapshot(
+                snapshot_manifest, catalogue
+            )
+        except ValueError:
+            frappe.throw("Medicine Item snapshot failed validation.")
+        with _tenant_projection_write_lock(tenant_site):
+            return _apply_validated_tenant_medicine_item_batch(
+                tenant_site, manifest, normalized
+            )
 
     if isinstance(products, str):
         try:
@@ -781,6 +1585,286 @@ def apply_tenant_projection_batch(
 
     with _tenant_projection_write_lock(tenant_site):
         return _apply_validated_tenant_projection_batch(tenant_site, manifest, normalized)
+
+
+def _ensure_medicine_reference(doctype, values):
+    name = values["name"]
+    if frappe.db.exists(doctype, name):
+        return
+    doc_values = {"doctype": doctype, **values}
+    if doctype in ("Medication Class", "Dosage Form", "UOM", "Prescription Dosage"):
+        doc_values.pop("name", None)
+    frappe.get_doc(doc_values).insert(ignore_permissions=True)
+
+
+def _apply_validated_tenant_medicine_item_batch(tenant_site, manifest, catalogue):
+    revision = manifest["revision"]
+    digest = manifest["digest"]
+    state = _tenant_snapshot_state(tenant_site)
+    last_revision = str(state.last_successful_revision or "")
+    last_digest = str(state.last_successful_digest or "")
+    item_codes = [item["item_code"] for item in catalogue["items"]]
+    if last_revision > revision or (
+        last_revision == revision and last_digest != digest
+    ):
+        return {
+            "status": "conflict",
+            "tenant_site": tenant_site,
+            "snapshot_manifest": dict(manifest),
+            "created_item_codes": [],
+            "updated_item_codes": [],
+            "skipped_item_codes": [],
+            "missing_item_codes": [],
+            "conflicting_item_codes": item_codes,
+        }
+
+    batch_item_codes = set(item_codes)
+    source_item_codes = set(catalogue["source_item_codes"])
+    source_medications = {row["name"] for row in catalogue["medications"]}
+    conflicting_codes = []
+    for item in catalogue["items"]:
+        if not frappe.db.exists("Item", item["item_code"]):
+            continue
+        doc = frappe.get_doc("Item", item["item_code"])
+        changed = any(
+            str(getattr(doc, fieldname) or "")
+            != str(item[fieldname] or "")
+            for fieldname in _MEDICINE_ITEM_FIELDS
+        )
+        centrally_linked = source_medications and frappe.db.exists(
+            "Medication Linked Item",
+            {
+                "item_code": item["item_code"],
+                "parent": ["in", sorted(source_medications)],
+            },
+        )
+        if changed and not centrally_linked:
+            conflicting_codes.append(item["item_code"])
+
+    conflicting_medications = []
+    for medication in catalogue["medications"]:
+        if not frappe.db.exists("Medication", medication["name"]):
+            continue
+        doc = frappe.get_doc("Medication", medication["name"])
+        existing_links = list(doc.get("linked_items", []))
+        centrally_linked = any(
+            row.item_code in source_item_codes for row in existing_links
+        )
+        changed = any(
+            str(getattr(doc, fieldname) or "")
+            != str(medication[fieldname] or "")
+            for fieldname in _MEDICATION_FIELDS
+        )
+        existing_combinations = sorted(
+            (
+                row.medication,
+                _identity_strength(row.strength),
+                str(row.strength_uom or ""),
+            )
+            for row in doc.get("combinations", [])
+        )
+        source_combinations = sorted(
+            (
+                row["medication"],
+                _identity_strength(row["strength"]),
+                row["strength_uom"],
+            )
+            for row in medication["combinations"]
+        )
+        changed = changed or existing_combinations != source_combinations
+        has_source_links = bool(medication["linked_items"])
+        if not centrally_linked and (changed or has_source_links):
+            conflicting_medications.append(medication["name"])
+
+    if conflicting_medications:
+        return {
+            "status": "conflict",
+            "tenant_site": tenant_site,
+            "snapshot_manifest": dict(manifest),
+            "created_item_codes": [],
+            "updated_item_codes": [],
+            "skipped_item_codes": [],
+            "missing_item_codes": [],
+            "conflicting_item_codes": sorted(
+                set(conflicting_codes) | set(item_codes)
+                if conflicting_medications
+                else set(conflicting_codes)
+            ),
+            "conflicting_medications": conflicting_medications,
+        }
+
+    savepoint = "clinify_medicine_item_catalogue_batch"
+    frappe.db.savepoint(savepoint)
+    created_codes = []
+    updated_codes = []
+    skipped_codes = []
+    try:
+        for row in catalogue["medication_classes"]:
+            _ensure_medicine_reference(
+                "Medication Class",
+                {"name": row["name"], "medication_class": row["medication_class"]},
+            )
+        for row in catalogue["dosage_forms"]:
+            _ensure_medicine_reference(
+                "Dosage Form",
+                {"name": row["name"], "dosage_form": row["dosage_form"]},
+            )
+        for row in catalogue["uoms"]:
+            _ensure_medicine_reference(
+                "UOM",
+                {
+                    "name": row["name"],
+                    "uom_name": row["uom_name"],
+                    "must_be_whole_number": row["must_be_whole_number"],
+                    "enabled": row["enabled"],
+                },
+            )
+        for row in catalogue["prescription_dosages"]:
+            _ensure_medicine_reference(
+                "Prescription Dosage",
+                {"name": row["name"], "dosage": row["dosage"]},
+            )
+        for row in catalogue["prescription_durations"]:
+            _ensure_medicine_reference(
+                "Prescription Duration",
+                {
+                    "name": row["name"],
+                    "number": row["number"],
+                    "period": row["period"],
+                },
+            )
+
+        for item in catalogue["items"]:
+            values = {
+                fieldname: item[fieldname]
+                for fieldname in _MEDICINE_ITEM_FIELDS
+            }
+            if item["item_code"] in conflicting_codes:
+                skipped_codes.append(item["item_code"])
+                continue
+            if frappe.db.exists("Item", item["item_code"]):
+                doc = frappe.get_doc("Item", item["item_code"])
+                changed = any(
+                    str(getattr(doc, fieldname) or "")
+                    != str(value or "")
+                    for fieldname, value in values.items()
+                )
+                if changed:
+                    for fieldname, value in values.items():
+                        setattr(doc, fieldname, value)
+                    doc.save(ignore_permissions=True)
+                    updated_codes.append(item["item_code"])
+                else:
+                    skipped_codes.append(item["item_code"])
+            else:
+                frappe.get_doc(
+                    {
+                        "doctype": "Item",
+                        "item_code": item["item_code"],
+                        **values,
+                    }
+                ).insert(ignore_permissions=True)
+                created_codes.append(item["item_code"])
+
+        for medication in catalogue["medications"]:
+            fields = {
+                fieldname: medication[fieldname]
+                for fieldname in _MEDICATION_FIELDS
+            }
+            if frappe.db.exists("Medication", medication["name"]):
+                doc = frappe.get_doc("Medication", medication["name"])
+                for fieldname, value in fields.items():
+                    setattr(doc, fieldname, value)
+            else:
+                doc = frappe.get_doc(
+                    {
+                        "doctype": "Medication",
+                        **fields,
+                    }
+                )
+                doc.insert(ignore_permissions=True)
+
+            existing_links = {
+                row.item_code: row
+                for row in doc.get("linked_items", [])
+                if row.item_code
+            }
+            source_links = {
+                row["item_code"]: row for row in medication["linked_items"]
+                if row["item_code"] not in conflicting_codes
+            }
+            merged_links = []
+            for item_code, row in existing_links.items():
+                if item_code not in batch_item_codes:
+                    merged_links.append(
+                        {
+                            "item_code": row.item_code,
+                            "item": row.item or row.item_code,
+                            "item_group": row.item_group,
+                            "stock_uom": row.stock_uom,
+                            "is_billable": row.is_billable,
+                            "change_in_item": 0,
+                        }
+                    )
+            for item_code, row in source_links.items():
+                merged_links.append(
+                    {
+                        "item_code": item_code,
+                        "item": item_code,
+                        "item_group": row["item_group"],
+                        "stock_uom": row["stock_uom"],
+                        "is_billable": row["is_billable"],
+                        "change_in_item": 0,
+                    }
+                )
+            doc.set("linked_items", merged_links)
+            doc.set("combinations", medication["combinations"])
+            doc.save(ignore_permissions=True)
+
+        for item in catalogue["items"]:
+            if item["item_code"] in conflicting_codes:
+                continue
+            doc = frappe.get_doc("Item", item["item_code"])
+            changed = any(
+                str(getattr(doc, fieldname) or "")
+                != str(item[fieldname] or "")
+                for fieldname in _MEDICINE_ITEM_FIELDS
+            )
+            if changed:
+                for fieldname in _MEDICINE_ITEM_FIELDS:
+                    setattr(doc, fieldname, item[fieldname])
+                doc.save(ignore_permissions=True)
+
+        state.last_attempted_at = now_datetime()
+        state.last_attempted_revision = revision
+        state.last_attempted_digest = digest
+        state.last_attempt_status = "Succeeded"
+        state.last_error_code = ""
+        state.last_successful_at = now_datetime()
+        state.last_successful_revision = revision
+        state.last_successful_digest = digest
+        state.last_created_count = len(created_codes)
+        state.last_updated_count = len(updated_codes)
+        state.last_skipped_count = len(skipped_codes)
+        state.flags.clinify_catalogue_state_update = True
+        if state.is_new():
+            state.insert(ignore_permissions=True)
+        else:
+            state.save(ignore_permissions=True)
+    except Exception:
+        frappe.db.rollback(save_point=savepoint)
+        raise
+
+    return {
+        "status": "success",
+        "tenant_site": tenant_site,
+        "snapshot_manifest": dict(manifest),
+        "created_item_codes": created_codes,
+        "updated_item_codes": updated_codes,
+        "skipped_item_codes": skipped_codes,
+        "missing_item_codes": [],
+        "conflicting_item_codes": sorted(conflicting_codes),
+    }
 
 
 def _tenant_snapshot_state(tenant_site):
@@ -1008,51 +2092,406 @@ def _response_product_ids(response, fieldname, known_ids):
     return product_ids
 
 
+def _response_item_codes(response, fieldname, known_codes):
+    values = response.get(fieldname, [])
+    if values is None:
+        return []
+    if not isinstance(values, (list, tuple)):
+        raise ValueError(f"Tenant synchronization returned invalid {fieldname}.")
+    item_codes = []
+    for value in values:
+        item_code = str(value or "").strip()
+        if item_code not in known_codes or item_code in item_codes:
+            raise ValueError(f"Tenant synchronization returned invalid {fieldname}.")
+        item_codes.append(item_code)
+    return item_codes
+
+
 def synchronize_tenant_catalogue(
     tenant_site,
     catalogue_revision,
     transport=None,
     state_store=None,
 ):
-    """Validate and request an atomic projection update through an injected transport.
+    """Synchronize, closing the internally created transport on return."""
+    if transport is not None:
+        return _synchronize_tenant_catalogue(
+            tenant_site,
+            catalogue_revision,
+            transport,
+            state_store,
+        )
+
+    with FrappeApiTokenTenantTransport() as transport:
+        return _synchronize_tenant_catalogue(
+            tenant_site,
+            catalogue_revision,
+            transport,
+            state_store,
+        )
+
+
+def _synchronize_tenant_catalogue(
+    tenant_site,
+    catalogue_revision,
+    transport,
+    state_store=None,
+):
+    """Synchronize central Drug Items through the selected authenticated transport.
 
     The transport must authenticate the tenant, apply the complete batch in one
-    tenant-local transaction, upsert by central_product_id, preserve omitted
-    products, and return only after that transaction succeeds. The default is
-    FrappeApiTokenTenantTransport; transports are injectable for isolated tests.
-    No direct cross-site database connection is used.
+    tenant-local transaction, upsert by the source Item code, preserve omitted
+    Items, and return only after that transaction succeeds. No direct
+    cross-site database connection is used.
     """
     control_site = require_control_site_admin()
     tenant_site = _safe_sync_target(tenant_site, control_site)
     revision = validate_catalogue_revision(catalogue_revision)
     if state_store is None:
         state_store = FrappeCatalogueSyncStateStore()
-    if transport is None:
-        transport = FrappeApiTokenTenantTransport()
     state_store.record_attempt(tenant_site, revision)
     try:
-        source_records = frappe.get_all(
-            "Clinify Medicine Product",
-            fields=list(_PRODUCT_FIELDS),
-            order_by="central_product_id asc",
-        )
+        catalogue = build_central_medicine_item_catalogue()
     except Exception:
         return _record_failure(state_store, tenant_site, revision, "central_catalogue_unavailable")
 
     try:
-        manifest, products = create_snapshot_manifest(source_records, revision)
+        manifest, catalogue = create_medicine_item_snapshot_manifest(
+            catalogue, revision
+        )
     except (TypeError, ValueError):
         return _record_failure(state_store, tenant_site, revision, "invalid_central_batch")
 
     state_store.record_attempt(tenant_site, revision, manifest["digest"])
 
+    batch_metrics = None
+    active_batch_attempt = 0
+    active_batch_size = 0
     try:
-        response = transport.apply_projection_batch_atomically(
+        if catalogue.get("catalogue_type") == "drug_item_catalogue_v1":
+            created_codes = []
+            updated_codes = []
+            skipped_codes = []
+            conflicting_codes = []
+            revision_time = datetime.strptime(revision, "%Y%m%d%H%M%S%f")
+            batch_queue = list(
+                _medicine_item_catalogue_batches(
+                    catalogue, _MEDICINE_ITEM_SYNC_BATCH_SIZE
+                )
+            )
+            batch_metrics = {
+                "normal_batch_attempts": len(batch_queue),
+                "batch_attempts": 0,
+                "conflict_responses": 0,
+                "reported_conflict_batches": 0,
+                "split_operations": 0,
+                "smallest_batch_size": None,
+                "successful_batch_count": 0,
+            }
+            batch_index = 0
+            batch_count = 0
+            while batch_queue:
+                batch = batch_queue.pop(0)
+                batch_revision = (
+                    revision_time + timedelta(microseconds=batch_index)
+                ).strftime("%Y%m%d%H%M%S%f")
+                batch_index += 1
+                batch_manifest, batch = create_medicine_item_snapshot_manifest(
+                    batch, batch_revision
+                )
+                active_batch_attempt = batch_metrics["batch_attempts"] + 1
+                active_batch_size = len(batch["items"])
+                batch_metrics["batch_attempts"] = active_batch_attempt
+                previous_smallest = batch_metrics["smallest_batch_size"]
+                batch_metrics["smallest_batch_size"] = (
+                    active_batch_size
+                    if previous_smallest is None
+                    else min(previous_smallest, active_batch_size)
+                )
+                batch_response = transport.apply_projection_batch_atomically(
+                    tenant_site,
+                    batch_manifest,
+                    batch,
+                )
+                if not isinstance(batch_response, Mapping):
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_response_invalid",
+                        manifest["digest"],
+                    )
+                if batch_response.get("status") == "conflict":
+                    batch_metrics["conflict_responses"] += 1
+                batch_codes = {item["item_code"] for item in batch["items"]}
+                if (
+                    str(batch_response.get("tenant_site") or "").strip().lower()
+                    != tenant_site
+                    or batch_response.get("snapshot_manifest") != batch_manifest
+                ):
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_response_invalid",
+                        manifest["digest"],
+                    )
+                try:
+                    batch_created = _response_item_codes(
+                        batch_response, "created_item_codes", batch_codes
+                    )
+                    batch_updated = _response_item_codes(
+                        batch_response, "updated_item_codes", batch_codes
+                    )
+                    batch_skipped = _response_item_codes(
+                        batch_response, "skipped_item_codes", batch_codes
+                    )
+                    batch_missing = _response_item_codes(
+                        batch_response, "missing_item_codes", batch_codes
+                    )
+                    batch_conflicts = _response_item_codes(
+                        batch_response, "conflicting_item_codes", batch_codes
+                    )
+                    conflicting_medications = batch_response.get(
+                        "conflicting_medications", []
+                    )
+                    if not isinstance(conflicting_medications, (list, tuple)):
+                        return _record_failure(
+                            state_store,
+                            tenant_site,
+                            revision,
+                            "tenant_response_invalid",
+                            manifest["digest"],
+                        )
+                    conflicting_medication_count = len(conflicting_medications)
+                except ValueError:
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_response_invalid",
+                        manifest["digest"],
+                    )
+                if batch_conflicts:
+                    batch_metrics["reported_conflict_batches"] += 1
+                    _LOGGER.warning(
+                        "Medicine catalogue batch conflict reported: "
+                        "tenant=%s batch_attempt=%d batch_size=%d "
+                        "category=%s conflicting_item_count=%d "
+                        "conflicting_medication_count=%d",
+                        tenant_site,
+                        active_batch_attempt,
+                        active_batch_size,
+                        (
+                            "medication_identity"
+                            if conflicting_medication_count
+                            else "item_or_snapshot"
+                        ),
+                        len(batch_conflicts),
+                        conflicting_medication_count,
+                    )
+                if (
+                    conflicting_medications
+                    and batch_response.get("status") != "conflict"
+                ):
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_response_invalid",
+                        manifest["digest"],
+                    )
+                if batch_response.get("status") == "conflict":
+                    if not batch_conflicts:
+                        return _record_failure(
+                            state_store,
+                            tenant_site,
+                            revision,
+                            "tenant_response_invalid",
+                            manifest["digest"],
+                        )
+                    if conflicting_medications:
+                        if any(
+                            not isinstance(name, str)
+                            or not name
+                            or name != name.strip()
+                            for name in conflicting_medications
+                        ):
+                            return _record_failure(
+                                state_store,
+                                tenant_site,
+                                revision,
+                                "tenant_response_invalid",
+                                manifest["digest"],
+                            )
+                        try:
+                            affected_item_codes = (
+                                _medicine_item_codes_for_conflicting_medications(
+                                    batch, conflicting_medications
+                                )
+                            )
+                        except ValueError:
+                            return _record_failure(
+                                state_store,
+                                tenant_site,
+                                revision,
+                                "tenant_response_invalid",
+                                manifest["digest"],
+                            )
+                        protected_codes = sorted(affected_item_codes)
+                        skipped_codes.extend(protected_codes)
+                        conflicting_codes.extend(protected_codes)
+                        unaffected_items = [
+                            item
+                            for item in batch["items"]
+                            if item["item_code"] not in affected_item_codes
+                        ]
+                        if unaffected_items:
+                            unaffected_catalogue = dict(batch)
+                            unaffected_catalogue["items"] = unaffected_items
+                            unaffected_batches = list(
+                                _medicine_item_catalogue_batches(
+                                    unaffected_catalogue,
+                                    _MEDICINE_ITEM_SYNC_BATCH_SIZE,
+                                )
+                            )
+                            batch_queue[0:0] = unaffected_batches
+                        continue
+                    if len(batch["items"]) > 1:
+                        batch_metrics["split_operations"] += 1
+                        sub_batches = list(
+                            _medicine_item_catalogue_batches(
+                                batch,
+                                max(1, len(batch["items"]) // 2),
+                            )
+                        )
+                        if len(sub_batches) < 2:
+                            return _record_failure(
+                                state_store,
+                                tenant_site,
+                                revision,
+                                "tenant_response_invalid",
+                                manifest["digest"],
+                            )
+                        batch_queue[0:0] = sub_batches
+                        continue
+                    if batch_conflicts != [batch["items"][0]["item_code"]]:
+                        return _record_failure(
+                            state_store,
+                            tenant_site,
+                            revision,
+                            "tenant_identity_conflict",
+                            manifest["digest"],
+                            conflicting_item_codes=batch_conflicts,
+                        )
+                    skipped_codes.extend(batch_conflicts)
+                    conflicting_codes.extend(batch_conflicts)
+                    continue
+                if batch_response.get("status") != "success":
+                    error_code = (
+                        "tenant_identity_conflict"
+                        if batch_conflicts
+                        else "tenant_sync_failed"
+                    )
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        error_code,
+                        manifest["digest"],
+                        conflicting_item_codes=batch_conflicts,
+                    )
+                if batch_conflicts and not set(batch_conflicts).issubset(
+                    batch_skipped
+                ):
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_identity_conflict",
+                        manifest["digest"],
+                        conflicting_item_codes=batch_conflicts,
+                    )
+                batch_outcomes = (
+                    batch_created + batch_updated + batch_skipped
+                )
+                if (
+                    any(
+                        len(set(codes)) != len(codes)
+                        for codes in (
+                            batch_created,
+                            batch_updated,
+                            batch_skipped,
+                            batch_missing,
+                            batch_conflicts,
+                        )
+                    )
+                    or
+                    set(batch_created) & set(batch_updated)
+                    or set(batch_created) & set(batch_skipped)
+                    or set(batch_updated) & set(batch_skipped)
+                    or set(batch_outcomes) & set(batch_missing)
+                ):
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_response_invalid",
+                        manifest["digest"],
+                    )
+                batch_missing.extend(
+                    sorted(
+                        batch_codes.difference(
+                            batch_outcomes, batch_missing, batch_conflicts
+                        )
+                    )
+                )
+                if batch_missing:
+                    return _record_failure(
+                        state_store,
+                        tenant_site,
+                        revision,
+                        "tenant_projection_incomplete",
+                        manifest["digest"],
+                        missing_item_codes=batch_missing,
+                    )
+                batch_metrics["successful_batch_count"] += 1
+                created_codes.extend(batch_created)
+                updated_codes.extend(batch_updated)
+                skipped_codes.extend(batch_skipped)
+                conflicting_codes.extend(batch_conflicts)
+                batch_count += 1
+            response = {
+                "status": "success",
+                "tenant_site": tenant_site,
+                "snapshot_manifest": manifest,
+                "created_item_codes": created_codes,
+                "updated_item_codes": updated_codes,
+                "skipped_item_codes": skipped_codes,
+                "missing_item_codes": [],
+                "conflicting_item_codes": conflicting_codes,
+                "batch_count": batch_count,
+            }
+        else:
+            response = transport.apply_projection_batch_atomically(
+                tenant_site,
+                manifest,
+                catalogue,
+            )
+    except Exception as exc:
+        if batch_metrics is not None:
+            active_batch_attempt = max(
+                active_batch_attempt,
+                batch_metrics["batch_attempts"],
+            )
+        _LOGGER.error(
+            "Medicine catalogue synchronization processing failed: "
+            "tenant=%s batch_attempt=%d batch_size=%d exception_type=%s",
             tenant_site,
-            manifest,
-            products,
+            active_batch_attempt,
+            active_batch_size,
+            type(exc).__name__,
         )
-    except Exception:
         return _record_failure(
             state_store,
             tenant_site,
@@ -1060,20 +2499,50 @@ def synchronize_tenant_catalogue(
             "tenant_sync_failed",
             manifest["digest"],
         )
+    finally:
+        if batch_metrics is not None:
+            failed_batch_count = (
+                batch_metrics["batch_attempts"]
+                - batch_metrics["successful_batch_count"]
+            )
+            _LOGGER.info(
+                "Medicine catalogue batch summary: tenant=%s "
+                "normal_batch_attempts=%d batch_attempts=%d "
+                "conflict_responses=%d reported_conflict_batches=%d "
+                "split_operations=%d smallest_batch_size=%d "
+                "successful_batch_count=%d failed_batch_count=%d",
+                tenant_site,
+                batch_metrics["normal_batch_attempts"],
+                batch_metrics["batch_attempts"],
+                batch_metrics["conflict_responses"],
+                batch_metrics["reported_conflict_batches"],
+                batch_metrics["split_operations"],
+                batch_metrics["smallest_batch_size"] or 0,
+                batch_metrics["successful_batch_count"],
+                failed_batch_count,
+            )
 
     if not isinstance(response, Mapping):
         return _record_failure(state_store, tenant_site, revision, "tenant_response_invalid")
 
-    known_ids = {product["central_product_id"] for product in products}
+    known_codes = {item["item_code"] for item in catalogue["items"]}
     try:
-        created_ids = _response_product_ids(response, "created_product_ids", known_ids)
-        updated_ids = _response_product_ids(response, "updated_product_ids", known_ids)
-        skipped_ids = _response_product_ids(response, "skipped_product_ids", known_ids)
-        missing_ids = _response_product_ids(response, "missing_product_ids", known_ids)
-        conflicting_ids = _response_product_ids(
+        created_codes = _response_item_codes(
+            response, "created_item_codes", known_codes
+        )
+        updated_codes = _response_item_codes(
+            response, "updated_item_codes", known_codes
+        )
+        skipped_codes = _response_item_codes(
+            response, "skipped_item_codes", known_codes
+        )
+        missing_codes = _response_item_codes(
+            response, "missing_item_codes", known_codes
+        )
+        conflicting_codes = _response_item_codes(
             response,
-            "conflicting_product_ids",
-            known_ids,
+            "conflicting_item_codes",
+            known_codes,
         )
     except ValueError:
         return _record_failure(state_store, tenant_site, revision, "tenant_response_invalid")
@@ -1083,38 +2552,55 @@ def synchronize_tenant_catalogue(
         or response.get("snapshot_manifest") != manifest
     ):
         return _record_failure(state_store, tenant_site, revision, "tenant_response_invalid")
-    outcome_ids = created_ids + updated_ids + skipped_ids
-    if len(set(outcome_ids + missing_ids + conflicting_ids)) != len(
-        outcome_ids + missing_ids + conflicting_ids
-    ):
-        return _record_failure(state_store, tenant_site, revision, "tenant_response_invalid")
-    unreported_ids = known_ids.difference(outcome_ids, missing_ids, conflicting_ids)
-    if unreported_ids:
-        missing_ids.extend(sorted(unreported_ids))
-    if conflicting_ids:
+    if conflicting_codes and not set(conflicting_codes).issubset(skipped_codes):
         return _record_failure(
             state_store,
             tenant_site,
             revision,
             "tenant_identity_conflict",
-            conflicting_product_ids=conflicting_ids,
-            missing_product_ids=missing_ids,
+            conflicting_item_codes=conflicting_codes,
+            missing_item_codes=missing_codes,
         )
-    if missing_ids:
+    if any(
+        len(set(codes)) != len(codes)
+        for codes in (
+            created_codes,
+            updated_codes,
+            skipped_codes,
+            missing_codes,
+            conflicting_codes,
+        )
+    ):
+        return _record_failure(state_store, tenant_site, revision, "tenant_response_invalid")
+    outcome_codes = created_codes + updated_codes + skipped_codes
+    if (
+        set(created_codes) & set(updated_codes)
+        or set(created_codes) & set(skipped_codes)
+        or set(updated_codes) & set(skipped_codes)
+        or set(outcome_codes) & set(missing_codes)
+        or not set(conflicting_codes).issubset(skipped_codes)
+    ):
+        return _record_failure(state_store, tenant_site, revision, "tenant_response_invalid")
+    unreported_codes = known_codes.difference(
+        outcome_codes, missing_codes, conflicting_codes
+    )
+    if unreported_codes:
+        missing_codes.extend(sorted(unreported_codes))
+    if missing_codes:
         return _record_failure(
             state_store,
             tenant_site,
             revision,
             "tenant_projection_incomplete",
-            missing_product_ids=missing_ids,
+            missing_item_codes=missing_codes,
         )
     if response.get("status") != "success":
         return _record_failure(state_store, tenant_site, revision, "tenant_sync_failed")
 
     counts = {
-        "created": len(created_ids),
-        "updated": len(updated_ids),
-        "skipped": len(skipped_ids),
+        "created": len(created_codes),
+        "updated": len(updated_codes),
+        "skipped": len(skipped_codes),
     }
     state_store.record_success(tenant_site, revision, counts, manifest["digest"])
     return {
@@ -1122,7 +2608,8 @@ def synchronize_tenant_catalogue(
         "tenant_site": tenant_site,
         "snapshot_manifest": manifest,
         **counts,
-        "created_product_ids": created_ids,
-        "updated_product_ids": updated_ids,
-        "skipped_product_ids": skipped_ids,
+        "created_item_codes": created_codes,
+        "updated_item_codes": updated_codes,
+        "skipped_item_codes": skipped_codes,
+        "conflicting_item_codes": conflicting_codes,
     }

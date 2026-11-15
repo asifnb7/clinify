@@ -1,0 +1,175 @@
+{
+  "actions": [],
+  "allow_import": 0,
+  "allow_rename": 0,
+  "autoname": "field:central_product_id",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "central_product_id",
+    "ingredient_name",
+    "medicine_name",
+    "strength",
+    "strength_uom",
+    "dosage_form",
+    "manufacturer",
+    "pack_label",
+    "source_mrp",
+    "source_selling_price",
+    "prescription_required",
+    "identity_hash",
+    "clinical_identity_hash",
+    "is_active",
+    "source_provider",
+    "source_identifier",
+    "source_revision",
+    "source_updated_at"
+  ],
+  "fields": [
+    {
+      "fieldname": "central_product_id",
+      "fieldtype": "Data",
+      "label": "Clinify Product ID",
+      "reqd": 1,
+      "unique": 1,
+      "read_only": 1,
+      "set_only_once": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "ingredient_name",
+      "fieldtype": "Data",
+      "label": "Ingredient / Generic Name",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "composition",
+      "fieldtype": "Small Text",
+      "label": "Composition",
+      "description": "Complete source medicine composition; preserved verbatim from the catalogue source.",
+      "read_only": 0
+    },
+    {
+      "fieldname": "medicine_name",
+      "fieldtype": "Data",
+      "label": "Medicine / Brand Name",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "strength",
+      "fieldtype": "Float",
+      "label": "Strength",
+      "precision": "6",
+      "reqd": 0,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "strength_uom",
+      "fieldtype": "Data",
+      "label": "Strength Unit",
+      "reqd": 0,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "dosage_form",
+      "fieldtype": "Data",
+      "label": "Dosage Form",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "manufacturer",
+      "fieldtype": "Data",
+      "label": "Manufacturer"
+    },
+    {
+      "fieldname": "pack_label",
+      "fieldtype": "Data",
+      "label": "Pack"
+    },
+    {
+      "fieldname": "source_mrp",
+      "fieldtype": "Currency",
+      "label": "Source MRP"
+    },
+    {
+      "fieldname": "source_selling_price",
+      "fieldtype": "Currency",
+      "label": "Source Selling Price"
+    },
+    {
+      "fieldname": "prescription_required",
+      "fieldtype": "Data",
+      "label": "Prescription Requirement"
+    },
+    {
+      "fieldname": "identity_hash",
+      "fieldtype": "Data",
+      "label": "Normalized Identity Key",
+      "hidden": 1,
+      "read_only": 1,
+      "unique": 1,
+      "no_copy": 1
+    },
+    {
+      "fieldname": "clinical_identity_hash",
+      "fieldtype": "Data",
+      "label": "Clinical Identity Key",
+      "hidden": 1,
+      "read_only": 1,
+      "no_copy": 1
+    },
+    {
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "label": "Active",
+      "default": "1",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_provider",
+      "fieldtype": "Data",
+      "label": "Source Provider"
+    },
+    {
+      "fieldname": "source_identifier",
+      "fieldtype": "Data",
+      "label": "Source Product Identifier"
+    },
+    {
+      "fieldname": "source_revision",
+      "fieldtype": "Data",
+      "label": "Source Revision"
+    },
+    {
+      "fieldname": "source_updated_at",
+      "fieldtype": "Datetime",
+      "label": "Source Updated At"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "module": "Clinify",
+  "name": "Clinify Medicine Product",
+  "naming_rule": "By fieldname",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 0,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "search_fields": "central_product_id,medicine_name,ingredient_name,manufacturer,source_identifier",
+  "sort_field": "ingredient_name",
+  "sort_order": "ASC",
+  "states": [],
+  "title_field": "medicine_name",
+  "track_changes": 1
+}
