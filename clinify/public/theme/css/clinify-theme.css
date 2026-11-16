@@ -265,8 +265,7 @@ select {
         min-width: 0;
     }
 
-    /* Force every workspace widget group into one usable
-       mobile column instead of retaining desktop columns. */
+    /* Force every workspace widget group into one mobile column. */
     [data-page-route="Workspaces"] .widget-group-body,
     [data-page-route="Workspaces"] .widget-group .grid-col-1,
     [data-page-route="Workspaces"] .widget-group .grid-col-2,
@@ -277,12 +276,21 @@ select {
         max-width: 100%;
     }
 
-    /* Prevent an individual widget from forcing the workspace
-       wider than the phone viewport. */
+    /* Override the desktop column span of each individual widget.
+       This is the critical mobile correction. */
+    [data-page-route="Workspaces"] .widget-group-body > .widget,
+    [data-page-route="Workspaces"] .widget-group-body > .widget-wrapper {
+        grid-column: 1 / -1 !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Prevent widget content from forcing horizontal overflow. */
     [data-page-route="Workspaces"] .widget,
     [data-page-route="Workspaces"] .widget-content,
     [data-page-route="Workspaces"] .widget-group {
         min-width: 0 !important;
-        max-width: 100%;
+        max-width: 100% !important;
     }
 }
