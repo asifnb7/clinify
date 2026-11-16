@@ -253,49 +253,79 @@ select {
    ============================================================ */
 @media (max-width: 767px) {
 
-    /* Let the workspace use the full phone width. */
-    [data-page-route="Workspaces"] .layout-side-section,
-    [data-page-route="Workspaces"] .standard-sidebar,
-    [data-page-route="Workspaces"] .list-sidebar {
-        width: auto;
+    /*
+     * Global mobile shell rules.
+     *
+     * Desktop layout is intentionally untouched.
+     * On mobile, Frappe controls the sidebar/drawer state while
+     * Clinify prevents desktop-sized containers from constraining
+     * the page content.
+     */
+
+    .layout-main,
+    .layout-main-section-wrapper,
+    .layout-main-section,
+    .page-container,
+    .workspace-page,
+    .editor-js-container {
+        width: 100%;
         max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
     }
 
-    [data-page-route="Workspaces"] .layout-main-section-wrapper,
-    [data-page-route="Workspaces"] .layout-main-section,
-    [data-page-route="Workspaces"] .workspace-page {
+    .layout-main-section-wrapper {
+        flex: 1 1 auto;
+    }
+
+    .layout-main-section,
+    .workspace-page,
+    .editor-js-container {
+        overflow-x: hidden;
+    }
+
+    /*
+     * Never impose a fixed Clinify sidebar width on mobile.
+     * Frappe's native mobile drawer/sidebar rules remain authoritative.
+     */
+    .layout-side-section,
+    .standard-sidebar,
+    .list-sidebar {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /*
+     * EditorJS workspaces and dashboard widgets must collapse
+     * naturally to the available mobile width.
+     */
+    .editor-js-container .ce-block,
+    .editor-js-container .ce-block__content,
+    .editor-js-container .widget,
+    .editor-js-container .widget-content,
+    .editor-js-container .widget-group {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .editor-js-container .widget-group-body,
+    .editor-js-container .grid-col-1,
+    .editor-js-container .grid-col-2,
+    .editor-js-container .grid-col-3 {
+        grid-template-columns: minmax(0, 1fr) !important;
         width: 100%;
         max-width: 100%;
         min-width: 0;
     }
 
-    /* Force every workspace widget group into one mobile column. */
-    [data-page-route="Workspaces"] .widget-group-body,
-    [data-page-route="Workspaces"] .widget-group .grid-col-1,
-    [data-page-route="Workspaces"] .widget-group .grid-col-2,
-    [data-page-route="Workspaces"] .widget-group .grid-col-3 {
-        grid-template-columns: minmax(0, 1fr) !important;
-        min-width: 0 !important;
-        width: 100%;
-        max-width: 100%;
-    }
-
-    /* Override the desktop column span of each individual widget.
-       This is the critical mobile correction. */
-    [data-page-route="Workspaces"] .widget-group-body > .widget,
-    [data-page-route="Workspaces"] .widget-group-body > .widget-wrapper {
+    .editor-js-container .widget-group-body > .widget,
+    .editor-js-container .widget-group-body > .widget-wrapper {
         grid-column: 1 / -1 !important;
-        min-width: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
-    }
-
-    /* Prevent widget content from forcing horizontal overflow. */
-    [data-page-route="Workspaces"] .widget,
-    [data-page-route="Workspaces"] .widget-content,
-    [data-page-route="Workspaces"] .widget-group {
         min-width: 0 !important;
-        max-width: 100% !important;
     }
 }
 
