@@ -249,6 +249,7 @@ select {
    ============================================================ */
 @media (max-width: 767px) {
 
+    /* Let the workspace use the full phone width. */
     [data-page-route="Workspaces"] .layout-side-section,
     [data-page-route="Workspaces"] .standard-sidebar,
     [data-page-route="Workspaces"] .list-sidebar {
@@ -257,14 +258,31 @@ select {
     }
 
     [data-page-route="Workspaces"] .layout-main-section-wrapper,
-    [data-page-route="Workspaces"] .layout-main-section {
+    [data-page-route="Workspaces"] .layout-main-section,
+    [data-page-route="Workspaces"] .workspace-page {
         width: 100%;
         max-width: 100%;
         min-width: 0;
     }
 
-    [data-page-route="Workspaces"] .layout-main-section,
-    [data-page-route="Workspaces"] .workspace-page {
-        overflow-x: hidden;
+    /* Force every workspace widget group into one usable
+       mobile column instead of retaining desktop columns. */
+    [data-page-route="Workspaces"] .widget-group-body,
+    [data-page-route="Workspaces"] .widget-group .grid-col-1,
+    [data-page-route="Workspaces"] .widget-group .grid-col-2,
+    [data-page-route="Workspaces"] .widget-group .grid-col-3 {
+        grid-template-columns: minmax(0, 1fr) !important;
+        min-width: 0 !important;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Prevent an individual widget from forcing the workspace
+       wider than the phone viewport. */
+    [data-page-route="Workspaces"] .widget,
+    [data-page-route="Workspaces"] .widget-content,
+    [data-page-route="Workspaces"] .widget-group {
+        min-width: 0 !important;
+        max-width: 100%;
     }
 }
