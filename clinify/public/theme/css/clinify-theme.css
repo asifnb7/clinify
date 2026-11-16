@@ -123,10 +123,14 @@ select {
 
 /* Sidebar Width */
 
-.layout-side-section,
-.standard-sidebar,
-.list-sidebar {
-    width: 280px;
+/* Keep the Clinify sidebar width on desktop only.
+   On mobile, Frappe's native responsive sidebar behavior must control these elements. */
+@media (min-width: 768px) {
+    .layout-side-section,
+    .standard-sidebar,
+    .list-sidebar {
+        width: 280px;
+    }
 }
 
 /* Sidebar Links */
@@ -292,5 +296,12 @@ select {
     [data-page-route="Workspaces"] .widget-group {
         min-width: 0 !important;
         max-width: 100% !important;
+    }
+}
+
+/* Mobile: keep the navigation column functional, but do not paint the full page blue. */
+@media (max-width: 767px) {
+    .layout-side-section {
+        background-color: transparent !important;
     }
 }
