@@ -241,3 +241,30 @@ select {
 
     padding-left: 18px;
 }
+
+
+/* ============================================================
+   CLINIFY MOBILE RESPONSIVE FIX
+   Desktop layout is intentionally untouched.
+   ============================================================ */
+@media (max-width: 767px) {
+
+    [data-page-route="Workspaces"] .layout-side-section,
+    [data-page-route="Workspaces"] .standard-sidebar,
+    [data-page-route="Workspaces"] .list-sidebar {
+        width: auto;
+        max-width: 100%;
+    }
+
+    [data-page-route="Workspaces"] .layout-main-section-wrapper,
+    [data-page-route="Workspaces"] .layout-main-section {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    [data-page-route="Workspaces"] .layout-main-section,
+    [data-page-route="Workspaces"] .workspace-page {
+        overflow-x: hidden;
+    }
+}
