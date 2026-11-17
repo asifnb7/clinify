@@ -39,5 +39,29 @@ def after_sync():
     _protect_control_plane_ui()
 
 
+def _fix_drug_prescription_metadata():
+    """Keep Drug Prescription metadata aligned after every site migration."""
+    field_name = frappe.db.get_value(
+        "DocField",
+        {
+            "parent": "Drug Prescription",
+            "fieldname": "dosage_form",
+        },
+        "name",
+    )
+
+    if field_name:
+        frappe.db.set_value(
+            "DocField",
+            field_name,
+            "reqd",
+            0,
+            update_modified=False,
+        )
+        frappe.clear_cache(doctype="Drug Prescription")
+
+
 def after_migrate():
     _protect_control_plane_ui()
+    _fix_drug_prescription_metadata()
+    frappe.db.commit()
