@@ -2,7 +2,10 @@
 // For license information, please see license.txt
 
 const tenantSlug = (value) => (value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-const updateTenantIdentifiers = (frm) => { const slug = tenantSlug(frm.doc.tenant_name); if (!slug) return; frm.set_value("tenant_code", slug.toUpperCase().slice(0, 50)); frm.set_value("site_name", `${slug.slice(0, 90)}.localhost`); };
+const updateTenantIdentifiers = (frm) => { const slug = tenantSlug(frm.doc.tenant_name); if (!slug) return; frm.set_value("tenant_code", slug.toUpperCase().slice(0, 50)); frm.set_value(
+    "site_name",
+    `${slug.slice(0, 90)}${window.location.hostname.endsWith(".localhost") ? ".localhost" : ".salniz.com"}`
+); };
 const updateSubscriptionEndDate = (frm) => { if (!frm.doc.plan) return; frappe.db.get_value("Clinify Plan", frm.doc.plan, "billing_cycle").then((r) => { const cycle = r.message && r.message.billing_cycle; if (!cycle) return; const d = frappe.datetime.str_to_obj(frappe.datetime.get_today()); if (cycle === "Monthly") d.setMonth(d.getMonth() + 1); else if (cycle === "Quarterly") d.setMonth(d.getMonth() + 3); else if (cycle === "Yearly") d.setFullYear(d.getFullYear() + 1); else return; d.setDate(d.getDate() - 1); frm.set_value("subscription_end_date", frappe.datetime.obj_to_str(d)); }); };
 frappe.ui.form.on("Clinify Tenant", {
  tenant_name(frm) { if (frm.is_new()) updateTenantIdentifiers(frm); },

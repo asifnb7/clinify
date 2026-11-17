@@ -287,13 +287,17 @@ def provision_tenant_from_ui(
         if not slug:
             frappe.throw("A valid Clinic Name is required to generate Tenant Code and Tenant Site.")
         tenant_code = slug.upper()[:50]
-        site_name = slug[:90] + ".localhost"
+
+        control_site = frappe.local.site or ""
+        domain_suffix = ".localhost" if control_site.endswith(".localhost") else ".salniz.com"
+        site_name = slug[:90] + domain_suffix
+
         base_code, base_site = tenant_code, site_name
         n = 2
         while frappe.db.exists("Clinify Tenant", {"tenant_code": tenant_code}) or frappe.db.exists("Clinify Tenant", {"site_name": site_name}):
             suffix = "-" + str(n)
             tenant_code = base_code[:50-len(suffix)] + suffix
-            site_name = base_site[:100-len(suffix)-len(".localhost")] + suffix + ".localhost"
+            site_name = base_site[:100-len(suffix)-len(domain_suffix)] + suffix + domain_suffix
             n += 1
 
 
