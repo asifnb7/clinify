@@ -15,6 +15,12 @@ CLINIFY_ADMIN_ROLE = "Clinify Clinic Admin"
 
 
 ADMIN_PERMISSIONS = {
+    "Customer": {
+        "read": 1, "write": 0, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 0, "export": 0, "print": 0,
+        "email": 0, "share": 0, "select": 1,
+    },
     "Account": {
         "read": 1, "write": 0, "create": 0, "delete": 0,
         "submit": 0, "cancel": 0, "amend": 0,
