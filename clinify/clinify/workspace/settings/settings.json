@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[]",
+ "content": "[{\"id\":\"clinic-profile-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Clinic Profile\",\"col\":3}}]",
  "creation": "2026-07-31 14:59:44.796894",
  "custom_blocks": [],
  "docstatus": 0,
@@ -22,6 +22,13 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 8.0,
- "shortcuts": [],
+ "shortcuts": [
+  {
+   "doc_view": "",
+   "label": "Clinic Profile",
+   "link_to": "Clinic Configuration",
+   "type": "DocType"
+  }
+ ],
  "title": "Settings"
 }

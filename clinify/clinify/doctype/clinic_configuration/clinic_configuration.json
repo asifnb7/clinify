@@ -17,6 +17,9 @@
     "column_break_contact",
     "clinic_email",
     "clinic_phone",
+    "clinic_website",
+    "clinic_logo",
+    "brand_primary_color",
     "address_section",
     "clinic_address",
     "city",
@@ -75,6 +78,23 @@
       "fieldname": "clinic_phone",
       "fieldtype": "Data",
       "label": "Clinic Phone"
+    },
+    {
+      "fieldname": "clinic_website",
+      "fieldtype": "Data",
+      "label": "Website",
+      "options": "URL"
+    },
+    {
+      "fieldname": "clinic_logo",
+      "fieldtype": "Attach Image",
+      "label": "Clinic Logo"
+    },
+    {
+      "default": "#173B82",
+      "fieldname": "brand_primary_color",
+      "fieldtype": "Color",
+      "label": "Primary Brand Colour"
     },
     {
       "fieldname": "address_section",

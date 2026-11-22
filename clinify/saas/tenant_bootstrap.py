@@ -208,6 +208,8 @@ ADMIN_PERMISSIONS = {
     "Clinic Configuration": {
         "read": 1, "write": 1, "create": 0, "delete": 0,
         "submit": 0, "cancel": 0, "amend": 0,
+        "report": 0, "export": 0, "print": 1,
+        "email": 0, "share": 0,
     },
     "Clinify Subscription": {
         "read": 1, "write": 1, "create": 0, "delete": 0,
@@ -336,6 +338,49 @@ def _ensure_admin_permissions():
 
     frappe.db.commit()
 
+
+def _ensure_clinic_profile_admin_permission():
+    """Grant the tenant admin access to their site's clinic profile singleton."""
+    if not frappe.db.exists("Role", CLINIFY_ADMIN_ROLE):
+        return
+    if not frappe.db.exists("DocType", "Clinic Configuration"):
+        return
+
+    permission_doctype = (
+        "Custom DocPerm"
+        if frappe.db.exists("Custom DocPerm", {"parent": "Clinic Configuration"})
+        else "DocPerm"
+    )
+    existing = frappe.db.exists(permission_doctype, {
+        "parent": "Clinic Configuration",
+        "role": CLINIFY_ADMIN_ROLE,
+        "permlevel": 0,
+    })
+    permissions = {
+        "read": 1, "write": 1, "create": 0, "delete": 0,
+        "submit": 0, "cancel": 0, "amend": 0,
+        "report": 0, "export": 0, "print": 1,
+        "email": 0, "share": 0,
+    }
+    if existing:
+        docperm = frappe.get_doc(permission_doctype, existing)
+        for field, value in permissions.items():
+            setattr(docperm, field, value)
+        docperm.save(ignore_permissions=True)
+    else:
+        docperm_data = {
+            "doctype": permission_doctype,
+            "parent": "Clinic Configuration",
+            "role": CLINIFY_ADMIN_ROLE,
+            "permlevel": 0,
+            **permissions,
+        }
+        if permission_doctype == "DocPerm":
+            docperm_data.update({"parenttype": "DocType", "parentfield": "permissions"})
+        frappe.get_doc(docperm_data).insert(ignore_permissions=True)
+    frappe.db.commit()
+
+
 def _ensure_gender_master_data():
     """Ensure the standard gender masters required by Healthcare are available."""
     if not frappe.db.exists("DocType", "Gender"):
@@ -371,6 +416,7 @@ def _ensure_clinic_configuration(
 
     clinic.clinic_name = tenant_name
     clinic.clinic_code = tenant_code
+    clinic.brand_primary_color = clinic.brand_primary_color or "#173B82"
 
     # Registered clinic contact information is authoritative
     # from the control-plane Clinify Tenant during provisioning.
@@ -1013,6 +1059,8 @@ def _finalize_frappe_setup():
 def _ensure_healthcare_dental_foundation():
     """Ensure the minimum Clinify dental scheduling foundation exists."""
 
+    _ensure_patient_customer_group()
+
     # -------------------------------------------------
     # Medical Department
     # -------------------------------------------------
@@ -1122,6 +1170,78 @@ def _ensure_healthcare_dental_foundation():
     frappe.db.commit()
 
 
+def _ensure_patient_customer_group():
+    """Ensure Healthcare patient/customer creation has a usable leaf group.
+
+    Healthcare copies ``Selling Settings.customer_group`` onto both Patient
+    and its linked ERPNext Customer. ERPNext rejects group nodes for that
+    field, so keep a valid existing leaf default or provision its standard
+    ``Individual`` leaf when no suitable group exists.
+    """
+    if not frappe.db.exists("DocType", "Customer Group"):
+        return None
+
+    def is_valid_leaf(group_name):
+        if not group_name:
+            return False
+        is_group = frappe.db.get_value("Customer Group", group_name, "is_group")
+        return is_group is not None and not is_group
+
+    default_group = frappe.db.get_single_value("Selling Settings", "customer_group")
+    if is_valid_leaf(default_group):
+        patient_group = default_group
+    else:
+        patient_group = None
+
+    if not patient_group:
+        existing_leaf = frappe.db.get_value(
+            "Customer Group", {"is_group": 0}, "name", order_by="name asc"
+        )
+        if existing_leaf:
+            patient_group = existing_leaf
+
+    if not patient_group:
+        root_group = frappe.db.get_value(
+            "Customer Group", {"is_group": 1, "parent_customer_group": ["in", ["", None]]}, "name"
+        ) or frappe.db.get_value("Customer Group", "All Customer Groups", "name")
+        if not root_group:
+            frappe.throw("Customer Group root is missing; cannot configure patient customers.")
+
+        patient_group = "Individual"
+        if frappe.db.exists("Customer Group", patient_group):
+            # Do not rewrite an existing group's type or hierarchy.
+            patient_group = "Patients"
+            suffix = 1
+            while frappe.db.exists("Customer Group", patient_group):
+                suffix += 1
+                patient_group = f"Patients {suffix}"
+
+        frappe.get_doc({
+            "doctype": "Customer Group",
+            "customer_group_name": patient_group,
+            "parent_customer_group": root_group,
+            "is_group": 0,
+        }).insert(ignore_permissions=True)
+
+    if default_group != patient_group:
+        frappe.db.set_single_value("Selling Settings", "customer_group", patient_group)
+
+    # Frappe initializes Link fields from DefaultValue before Healthcare's
+    # before_insert fallback runs, so the global/user customer_group defaults
+    # must also avoid pointing at a group node.
+    for saved_default in frappe.db.get_all(
+        "DefaultValue",
+        filters={"defkey": "customer_group"},
+        fields=["parent", "defvalue"],
+    ):
+        if not is_valid_leaf(saved_default.defvalue):
+            frappe.db.set_default(
+                "customer_group", patient_group, parent=saved_default.parent
+            )
+
+    return patient_group
+
+
 def reconcile_tenant_foundation():
     """Repair only Clinify-owned administrator and Healthcare foundation state.
 
@@ -1156,7 +1276,33 @@ def reconcile_tenant_foundation():
             "Clinify Clinic Admin permissions",
             "Gender master data",
             "Healthcare and Dental foundation",
+            "Non-group patient Customer Group default",
         ],
+    }
+
+
+def reconcile_patient_customer_group():
+    """Repair only the non-group Customer Group default used for patients."""
+    frappe.only_for("System Manager")
+
+    site_name = (frappe.local.site or "").strip().lower()
+    control_site = (
+        frappe.conf.get("clinify_control_site") or "clinify.localhost"
+    ).strip().lower()
+
+    from clinify.saas.sso import _is_control_site
+
+    if site_name == control_site or _is_control_site():
+        frappe.throw("Patient Customer Group reconciliation cannot run on the control site.")
+
+    patient_group = _ensure_patient_customer_group()
+    frappe.db.commit()
+
+    return {
+        "success": bool(patient_group),
+        "site": site_name,
+        "customer_group": patient_group,
+        "is_group": 0,
     }
 
 

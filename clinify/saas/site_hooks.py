@@ -61,7 +61,23 @@ def _fix_drug_prescription_metadata():
         frappe.clear_cache(doctype="Drug Prescription")
 
 
+def _ensure_clinic_profile_defaults():
+    if not frappe.db.exists("DocType", "Clinic Configuration"):
+        return
+    if not frappe.db.get_single_value("Clinic Configuration", "brand_primary_color"):
+        frappe.db.set_single_value(
+            "Clinic Configuration",
+            "brand_primary_color",
+            "#173B82",
+        )
+
+
 def after_migrate():
     _protect_control_plane_ui()
     _fix_drug_prescription_metadata()
+    if not _is_control_site():
+        _ensure_clinic_profile_defaults()
+        from clinify.saas.tenant_bootstrap import _ensure_clinic_profile_admin_permission
+
+        _ensure_clinic_profile_admin_permission()
     frappe.db.commit()

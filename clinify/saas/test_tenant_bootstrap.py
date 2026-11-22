@@ -9,7 +9,121 @@ import frappe
 from clinify.saas import tenant_bootstrap
 
 
+def run_patient_customer_creation_smoke():
+    """Exercise Healthcare Patient->Customer creation and roll it back."""
+    site_name = (frappe.local.site or "").strip().lower()
+    assert site_name == "arman-clinic.localhost", (
+        f"Smoke runner is restricted to arman-clinic.localhost, got {site_name!r}"
+    )
+
+    frappe.db.savepoint("patient_customer_creation_smoke")
+    try:
+        patient = frappe.get_doc({
+            "doctype": "Patient",
+            "first_name": "Clinify Parity Smoke",
+            "sex": "Male",
+        })
+        try:
+            patient.insert(ignore_permissions=True)
+        except Exception as exc:
+            return {
+                "success": False,
+                "patient_customer_group": patient.customer_group,
+                "patient_group_is_group": frappe.db.get_value(
+                    "Customer Group", patient.customer_group, "is_group"
+                ) if patient.customer_group else None,
+                "selling_settings_customer_group": frappe.db.get_single_value(
+                    "Selling Settings", "customer_group"
+                ),
+                "error": str(exc),
+            }
+        customer = frappe.db.get_value("Patient", patient.name, "customer")
+        assert customer, "Healthcare did not create and link an ERPNext Customer"
+        customer_group = frappe.db.get_value("Customer", customer, "customer_group")
+        expected_group = frappe.db.get_single_value("Selling Settings", "customer_group")
+        assert customer_group == expected_group, (
+            f"Customer group mismatch: expected {expected_group!r}, got {customer_group!r}"
+        )
+        assert not frappe.db.get_value("Customer Group", customer_group, "is_group"), (
+            f"Linked Customer uses group node {customer_group!r}"
+        )
+        return {
+            "success": True,
+            "patient": patient.name,
+            "customer": customer,
+            "customer_group": customer_group,
+            "rolled_back": True,
+        }
+    finally:
+        frappe.db.rollback(save_point="patient_customer_creation_smoke")
+
+
 class TestTenantBootstrapSetupFinalization(unittest.TestCase):
+    def test_patient_customer_group_replaces_group_default_with_leaf(self):
+        def get_value(doctype, name_or_filters, fieldname=None, **kwargs):
+            if doctype != "Customer Group":
+                return None
+            if isinstance(name_or_filters, dict) and name_or_filters.get("is_group") == 0:
+                return None
+            if isinstance(name_or_filters, dict) and name_or_filters.get("is_group") == 1:
+                return "All Customer Groups"
+            if name_or_filters == "All Customer Groups" and fieldname == "name":
+                return "All Customer Groups"
+            return 1 if fieldname == "is_group" else None
+
+        new_group = SimpleNamespace(insert=lambda **kwargs: None)
+        with patch.object(tenant_bootstrap.frappe.db, "exists", return_value=True), \
+             patch.object(tenant_bootstrap.frappe.db, "get_single_value", return_value="All Customer Groups"), \
+             patch.object(tenant_bootstrap.frappe.db, "get_value", side_effect=get_value), \
+             patch.object(tenant_bootstrap.frappe.db, "get_all", return_value=[SimpleNamespace(parent="__default", defvalue="All Customer Groups")]), \
+             patch.object(tenant_bootstrap.frappe.db, "set_default") as set_default, \
+             patch.object(tenant_bootstrap.frappe.db, "set_single_value") as set_single_value, \
+             patch.object(tenant_bootstrap.frappe, "get_doc", return_value=new_group) as get_doc:
+            result = tenant_bootstrap._ensure_patient_customer_group()
+
+        self.assertEqual(result, "Individual")
+        self.assertEqual(get_doc.call_args.args[0]["is_group"], 0)
+        self.assertEqual(get_doc.call_args.args[0]["parent_customer_group"], "All Customer Groups")
+        set_single_value.assert_called_once_with("Selling Settings", "customer_group", "Individual")
+        set_default.assert_called_once_with("customer_group", "Individual", parent="__default")
+
+    def test_patient_customer_group_reuses_existing_leaf_when_default_is_invalid(self):
+        def get_value(doctype, name_or_filters, fieldname=None, **kwargs):
+            if isinstance(name_or_filters, dict) and name_or_filters.get("is_group") == 0:
+                return "Patients"
+            if name_or_filters == "All Customer Groups" and fieldname == "is_group":
+                return 1
+            return None
+
+        with patch.object(tenant_bootstrap.frappe.db, "exists", return_value=True), \
+             patch.object(tenant_bootstrap.frappe.db, "get_single_value", return_value="All Customer Groups"), \
+             patch.object(tenant_bootstrap.frappe.db, "get_value", side_effect=get_value), \
+             patch.object(tenant_bootstrap.frappe.db, "get_all", return_value=[SimpleNamespace(parent="__default", defvalue="All Customer Groups")]), \
+             patch.object(tenant_bootstrap.frappe.db, "set_default") as set_default, \
+             patch.object(tenant_bootstrap.frappe.db, "set_single_value") as set_single_value, \
+             patch.object(tenant_bootstrap.frappe, "get_doc") as get_doc:
+            result = tenant_bootstrap._ensure_patient_customer_group()
+
+        self.assertEqual(result, "Patients")
+        set_single_value.assert_called_once_with("Selling Settings", "customer_group", "Patients")
+        set_default.assert_called_once_with("customer_group", "Patients", parent="__default")
+        get_doc.assert_not_called()
+
+    def test_patient_customer_group_preserves_valid_existing_default(self):
+        with patch.object(tenant_bootstrap.frappe.db, "exists", return_value=True), \
+             patch.object(tenant_bootstrap.frappe.db, "get_single_value", return_value="Patients"), \
+             patch.object(tenant_bootstrap.frappe.db, "get_value", return_value=0), \
+             patch.object(tenant_bootstrap.frappe.db, "get_all", return_value=[]), \
+             patch.object(tenant_bootstrap.frappe.db, "set_default") as set_default, \
+             patch.object(tenant_bootstrap.frappe.db, "set_single_value") as set_single_value, \
+             patch.object(tenant_bootstrap.frappe, "get_doc") as get_doc:
+            result = tenant_bootstrap._ensure_patient_customer_group()
+
+        self.assertEqual(result, "Patients")
+        set_single_value.assert_not_called()
+        set_default.assert_not_called()
+        get_doc.assert_not_called()
+
     def test_bootstrap_tenant_invokes_required_foundation_helpers(self):
         helper_names = (
             "_ensure_admin_role",
