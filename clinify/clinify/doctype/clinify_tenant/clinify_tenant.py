@@ -137,4 +137,45 @@ def generate_tenant_id(tenant_name, subscription_start_date):
 
 
 class ClinifyTenant(Document):
-    pass
+	def validate(self):
+		footer_modes = {"None", "Powered by Clinify", "Custom Message", "Custom"}
+		footer_alignments = {"Left", "Center", "Right"}
+
+		for prefix, title in (("print_footer", "Prescription"), ("invoice_footer", "Invoice")):
+			mode_field = "{}_mode".format(prefix)
+			if not self.get(mode_field):
+				self.set(mode_field, "Powered by Clinify")
+			elif self.get(mode_field) not in footer_modes:
+				frappe.throw("Select a valid {} Footer Type.".format(title))
+			elif self.get(mode_field) == "Custom":
+				self.set(mode_field, "Custom Message")
+
+			text_field = "{}_text".format(prefix)
+			if self.get(text_field) is None:
+				self.set(text_field, "Powered by Clinify")
+
+			alignment_field = "{}_alignment".format(prefix)
+			if not self.get(alignment_field):
+				self.set(alignment_field, "Center")
+			elif self.get(alignment_field) not in footer_alignments:
+				frappe.throw("Select a valid {} Footer Alignment.".format(title))
+
+	def on_update(self):
+		footer_fields = (
+			"print_footer_mode",
+			"print_footer_text",
+			"print_footer_alignment",
+			"print_footer_bold",
+			"show_footer_on_prescription",
+			"invoice_footer_mode",
+			"invoice_footer_text",
+			"invoice_footer_alignment",
+			"invoice_footer_bold",
+			"show_footer_on_invoice",
+		)
+		if not any(self.has_value_changed(field) for field in footer_fields):
+			return
+
+		from clinify.saas.orchestrator import _sync_tenant_print_footer_config
+
+		_sync_tenant_print_footer_config(self)

@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[]",
+ "content": "[{\"id\":\"clinify-home-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Clinify</b></span>\",\"col\":12}},{\"id\":\"reception-dashboard-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Reception Dashboard\",\"col\":4}},{\"id\":\"clinic-profile-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Clinic Profile\",\"col\":4}}]",
  "creation": "2026-07-31 14:49:13.590426",
  "custom_blocks": [],
  "docstatus": 0,
@@ -22,6 +22,6 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 0.0,
- "shortcuts": [],
+ "shortcuts": [{"doc_view":"","label":"Reception Dashboard","link_to":"Reception Dashboard","type":"Page"},{"doc_view":"","label":"Clinic Profile","link_to":"Clinic Configuration","type":"DocType"}],
  "title": "Clinify"
 }

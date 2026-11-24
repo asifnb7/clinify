@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"shortcuts\", \"type\": \"shortcut\"}]",
+ "content": "[{\"id\":\"reception-dashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Reception Dashboard\",\"col\":12}}]",
  "creation": "2026-07-31 18:37:11.817466",
  "custom_blocks": [],
  "docstatus": 0,

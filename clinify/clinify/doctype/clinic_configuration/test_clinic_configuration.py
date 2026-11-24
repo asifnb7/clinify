@@ -42,6 +42,8 @@ class TestClinicConfiguration(FrappeTestCase):
 		self.assertEqual(self.meta.get_field("clinic_website").options, "URL")
 		self.assertEqual(self.meta.get_field("brand_primary_color").fieldtype, "Color")
 		self.assertEqual(self.meta.get_field("brand_primary_color").default, "#173B82")
+		self.assertTrue(self.meta.get_field("platform_attribution_text").read_only)
+		self.assertTrue(self.meta.get_field("platform_attribution_position").read_only)
 
 	def test_tenant_admin_cannot_change_platform_managed_fields(self):
 		from clinify.saas.tenant_bootstrap import ADMIN_PERMISSIONS

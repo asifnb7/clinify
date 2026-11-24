@@ -21,6 +21,18 @@
     "registered_state",
     "postal_code",
     "registered_country",
+    "print_footer_section",
+    "show_footer_on_prescription",
+    "print_footer_mode",
+    "print_footer_text",
+    "print_footer_alignment",
+    "print_footer_bold",
+    "invoice_footer_section",
+    "show_footer_on_invoice",
+    "invoice_footer_mode",
+    "invoice_footer_text",
+    "invoice_footer_alignment",
+    "invoice_footer_bold",
     "administrator_section",
     "administrator_name",
     "administrator_email",
@@ -240,6 +252,82 @@
       "fieldtype": "Link",
       "label": "Country",
       "options": "Country"
+    },
+    {
+      "fieldname": "print_footer_section",
+      "fieldtype": "Section Break",
+      "label": "Prescription Footer"
+    },
+    {
+      "default": 1,
+      "fieldname": "show_footer_on_prescription",
+      "fieldtype": "Check",
+      "label": "Enable Prescription Footer"
+    },
+    {
+      "default": "Powered by Clinify",
+      "fieldname": "print_footer_mode",
+      "fieldtype": "Select",
+      "label": "Prescription Footer Type",
+      "options": "None\nPowered by Clinify\nCustom Message"
+    },
+    {
+      "default": "Powered by Clinify",
+      "description": "Used when Prescription Footer Type is Custom Message. Text is escaped when printed.",
+      "fieldname": "print_footer_text",
+      "fieldtype": "Data",
+      "label": "Prescription Footer Message"
+    },
+    {
+      "default": "Center",
+      "fieldname": "print_footer_alignment",
+      "fieldtype": "Select",
+      "label": "Prescription Footer Alignment",
+      "options": "Left\nCenter\nRight"
+    },
+    {
+      "default": 1,
+      "fieldname": "print_footer_bold",
+      "fieldtype": "Check",
+      "label": "Prescription Footer Bold"
+    },
+    {
+      "fieldname": "invoice_footer_section",
+      "fieldtype": "Section Break",
+      "label": "Invoice Footer"
+    },
+    {
+      "default": 1,
+      "fieldname": "show_footer_on_invoice",
+      "fieldtype": "Check",
+      "label": "Enable Invoice Footer"
+    },
+    {
+      "default": "Powered by Clinify",
+      "fieldname": "invoice_footer_mode",
+      "fieldtype": "Select",
+      "label": "Invoice Footer Type",
+      "options": "None\nPowered by Clinify\nCustom Message"
+    },
+    {
+      "default": "Powered by Clinify",
+      "description": "Used when Invoice Footer Type is Custom Message. Text is escaped when printed.",
+      "fieldname": "invoice_footer_text",
+      "fieldtype": "Data",
+      "label": "Invoice Footer Message"
+    },
+    {
+      "default": "Center",
+      "fieldname": "invoice_footer_alignment",
+      "fieldtype": "Select",
+      "label": "Invoice Footer Alignment",
+      "options": "Left\nCenter\nRight"
+    },
+    {
+      "default": 1,
+      "fieldname": "invoice_footer_bold",
+      "fieldtype": "Check",
+      "label": "Invoice Footer Bold"
     }
   ],
   "grid_page_length": 50,

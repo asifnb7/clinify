@@ -24,6 +24,12 @@ class TestClinifySso(unittest.TestCase):
 
         self.assertIs(bootinfo["clinify_is_control_site"], True)
 
+        bootinfo = {}
+        with patch.object(sso, "_is_control_site", return_value=False):
+            sso.extend_bootinfo(bootinfo)
+
+        self.assertIs(bootinfo["clinify_is_control_site"], False)
+
     def test_tenant_state_and_destination_are_rejected(self):
         with patch.object(sso, "today", return_value="2026-01-01"):
             for changes in ({"enabled": 0}, {"clinic_status": "Inactive"}, {"provisioning_status": "Pending"}, {"subscription_status": "Expired"}, {"subscription_end_date": None}, {"domain": "evil.example"}, {"site_name": "other.salniz.com"}):

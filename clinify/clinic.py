@@ -1,4 +1,9 @@
+import re
+
 import frappe
+
+
+DEFAULT_CLINIC_BRAND_COLOR = "#173B82"
 
 
 def get_current_clinic():
@@ -74,4 +79,58 @@ def get_clinic_configuration():
         "activation_date": clinic.activation_date,
         "free_followup_days": clinic.free_followup_days,
         "allow_multiple_free_followups": clinic.allow_multiple_free_followups,
+    }
+
+
+def get_print_branding():
+    """Return validated, current-site branding values for print formats."""
+    import json
+
+    clinic = get_current_clinic()
+
+    color = (clinic.get("brand_primary_color") or "").strip()
+    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
+        color = DEFAULT_CLINIC_BRAND_COLOR
+
+    logo_url = (clinic.get("clinic_logo") or "").strip()
+    if not logo_url.startswith(("/files/", "/private/files/")):
+        logo_url = None
+    elif not frappe.db.exists(
+        "File",
+        {
+            "file_url": logo_url,
+            "attached_to_doctype": "Clinic Configuration",
+            "attached_to_name": "Clinic Configuration",
+        },
+    ):
+        logo_url = None
+
+    from clinify.saas.print_footer_config import (
+        PRINT_FOOTER_SITE_CONFIG_KEY,
+        normalize_print_footer_config,
+    )
+
+    footer_config = frappe.conf.get(PRINT_FOOTER_SITE_CONFIG_KEY)
+    if isinstance(footer_config, str):
+        try:
+            footer_config = json.loads(footer_config)
+        except (TypeError, ValueError):
+            footer_config = None
+
+    platform_footer = normalize_print_footer_config(footer_config)
+
+    return {
+        "clinic": clinic,
+        "logo_url": logo_url,
+        "brand_primary_color": color,
+        "platform_footer": platform_footer,
+    }
+
+
+def get_legacy_platform_footer_settings():
+    """Read tenant-local legacy footer fields for the one-time control-site migration."""
+    clinic = get_current_clinic()
+    return {
+        "platform_attribution_text": clinic.get("platform_attribution_text"),
+        "platform_attribution_position": clinic.get("platform_attribution_position"),
     }

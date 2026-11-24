@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[]",
+ "content": "[{\"id\":\"medication-request\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Medication Request\",\"col\":4}},{\"id\":\"medication-list\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Medication\",\"col\":4}},{\"id\":\"medicine-items\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Item\",\"col\":4}}]",
  "creation": "2026-07-31 14:59:44.736941",
  "custom_blocks": [],
  "docstatus": 0,
@@ -22,6 +22,10 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 5.0,
- "shortcuts": [],
+ "shortcuts": [
+  {"doc_view": "List", "label": "Medication Request", "link_to": "Medication Request", "type": "DocType"},
+  {"doc_view": "List", "label": "Medication", "link_to": "Medication", "type": "DocType"},
+  {"doc_view": "List", "label": "Medicine Items", "link_to": "Item", "type": "DocType"}
+ ],
  "title": "Pharmacy"
 }

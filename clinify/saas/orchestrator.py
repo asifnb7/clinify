@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,12 @@ from clinify.saas.control_site_identity import (
     validate_control_site_administrator,
 )
 from clinify.clinify.doctype.clinify_tenant.clinify_tenant import generate_tenant_id
+from clinify.saas.print_footer_config import (
+    DEFAULT_PRINT_FOOTER_CONFIG,
+    PRINT_FOOTER_SITE_CONFIG_KEY,
+    footer_config_from_tenant,
+    normalize_print_footer_config,
+)
 
 
 BENCH_PATH = Path(frappe.get_app_path("clinify")).parents[2]
@@ -138,7 +145,7 @@ def _tenant_config_values():
     return values
 
 
-def _configure_tenant_site_config(site_name):
+def _configure_tenant_site_config(site_name, tenant=None):
     """Copy the control-plane settings of this site onto a tenant site.
 
     Without this step a tenant has no Clinify configuration at all, which
@@ -156,6 +163,54 @@ def _configure_tenant_site_config(site_name):
                 str(value),
             ]
         )
+
+    footer = (
+        footer_config_from_tenant(tenant)
+        if tenant is not None
+        else normalize_print_footer_config(DEFAULT_PRINT_FOOTER_CONFIG)
+    )
+    _write_tenant_footer_site_config(site_name, footer)
+
+
+def _sync_tenant_print_footer_config(tenant):
+    """Project a control-site tenant's footer settings to its own site config."""
+    from clinify.saas.sso import _is_control_site
+
+    if not _is_control_site():
+        return False
+
+    site_name = str(tenant.get("site_name") or "").strip().lower()
+    if (
+        not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", site_name)
+        or site_name == (frappe.local.site or "").strip().lower()
+        or tenant.get("provisioning_status") != "Ready"
+        or not _site_exists(site_name)
+    ):
+        return False
+
+    footer = footer_config_from_tenant(tenant)
+    _write_tenant_footer_site_config(site_name, footer)
+    return True
+
+
+def _write_tenant_footer_site_config(site_name, footer):
+    footer_projection = {
+        document_type: {
+            key: footer[document_type][key]
+            for key in ("mode", "text", "alignment", "bold", "enabled")
+        }
+        for document_type in ("prescription", "invoice")
+    }
+    _run_bench(
+        [
+            "--site",
+            site_name,
+            "set-config",
+            PRINT_FOOTER_SITE_CONFIG_KEY,
+            repr(footer_projection),
+            "--parse",
+        ]
+    )
 
 
 def _get_plan_definition(plan_code):
@@ -608,7 +663,7 @@ def provision_tenant(
         # the database credentials it generates.  It also covers a retry whose
         # earlier attempt died mid-install and left the directory behind.
         # Nothing else may run against the tenant before this.
-        _configure_tenant_site_config(validation["site_name"])
+        _configure_tenant_site_config(validation["site_name"], tenant=tenant)
 
         _set_status(tenant, "Installing Apps")
 

@@ -20,6 +20,8 @@
     "clinic_website",
     "clinic_logo",
     "brand_primary_color",
+    "platform_attribution_text",
+    "platform_attribution_position",
     "address_section",
     "clinic_address",
     "city",
@@ -95,6 +97,22 @@
       "fieldname": "brand_primary_color",
       "fieldtype": "Color",
       "label": "Primary Brand Colour"
+    },
+    {
+      "default": "Powered by Clinify",
+      "description": "Shown below printed documents. Clinify controls its position and appearance.",
+      "fieldname": "platform_attribution_text",
+      "fieldtype": "Data",
+      "label": "Platform Attribution Text",
+      "read_only": 1
+    },
+    {
+      "default": "Center",
+      "fieldname": "platform_attribution_position",
+      "fieldtype": "Select",
+      "label": "Platform Attribution Position",
+      "options": "Left\nCenter\nRight",
+      "read_only": 1
     },
     {
       "fieldname": "address_section",

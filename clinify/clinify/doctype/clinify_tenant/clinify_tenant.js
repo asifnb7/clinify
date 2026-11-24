@@ -7,11 +7,16 @@ const updateTenantIdentifiers = (frm) => { const slug = tenantSlug(frm.doc.tenan
     `${slug.slice(0, 90)}${window.location.hostname.endsWith(".localhost") ? ".localhost" : ".salniz.com"}`
 ); };
 const updateSubscriptionEndDate = (frm) => { if (!frm.doc.plan) return; frappe.db.get_value("Clinify Plan", frm.doc.plan, "billing_cycle").then((r) => { const cycle = r.message && r.message.billing_cycle; if (!cycle) return; const d = frappe.datetime.str_to_obj(frappe.datetime.get_today()); if (cycle === "Monthly") d.setMonth(d.getMonth() + 1); else if (cycle === "Quarterly") d.setMonth(d.getMonth() + 3); else if (cycle === "Yearly") d.setFullYear(d.getFullYear() + 1); else return; d.setDate(d.getDate() - 1); frm.set_value("subscription_end_date", frappe.datetime.obj_to_str(d)); }); };
+const refresh_footer_messages = (frm) => {
+ frm.toggle_display("print_footer_text", frm.doc.print_footer_mode === "Custom Message");
+ frm.toggle_display("invoice_footer_text", frm.doc.invoice_footer_mode === "Custom Message");
+};
 frappe.ui.form.on("Clinify Tenant", {
  tenant_name(frm) { if (frm.is_new()) updateTenantIdentifiers(frm); },
  plan(frm) { if (frm.is_new()) updateSubscriptionEndDate(frm); },
  refresh(frm) {
   frm.set_df_property("tenant_code", "read_only", 1); frm.set_df_property("site_name", "read_only", 1);
+  refresh_footer_messages(frm);
   if (frm.is_new() && frm.doc.tenant_name) updateTenantIdentifiers(frm);
   if (frm.is_new() && frm.doc.plan && !frm.doc.subscription_end_date) updateSubscriptionEndDate(frm);
   if (!frm.doc.__islocal && ["Pending", "Failed"].includes(frm.doc.provisioning_status) && frappe.user.has_role("System Manager")) {
@@ -45,5 +50,7 @@ frappe.ui.form.on("Clinify Tenant", {
     }, __("Provision Tenant"), __("Provision"));
    });
   }
- }
+ },
+ print_footer_mode(frm) { refresh_footer_messages(frm); },
+ invoice_footer_mode(frm) { refresh_footer_messages(frm); }
 });

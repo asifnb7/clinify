@@ -322,8 +322,17 @@ document.addEventListener("DOMContentLoaded", function () {
                     return;
                 }
 
+                const homePage = sameOriginDestination(data.home_page);
+                const homePagePath = homePage
+                    ? new URL(homePage).pathname.replace(/\/$/, "")
+                    : "";
+                const defaultDestination =
+                    !{{ "true" if clinify_is_control_site else "false" }} &&
+                    homePagePath === "/me"
+                        ? "/app"
+                        : data.home_page;
                 const destination = sameOriginDestination(
-                    data.redirect_to || data.home_page
+                    data.redirect_to || defaultDestination
                 );
 
                 if (destination) {

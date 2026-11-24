@@ -63,7 +63,14 @@ app_include_js = [
     "/assets/clinify/js/reception_route.js",
     "/assets/clinify/js/tenant_security.js",
     "/assets/clinify/js/clinify_logout.js",
+    "/assets/clinify/js/tenant_branding.js",
 ]
+
+jinja = {
+    "methods": [
+        "clinify.clinic.get_print_branding",
+    ],
+}
 
 
 doctype_list_js = {

@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[]",
+ "content": "[{\"id\":\"doctor-dashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Doctor Dashboard\",\"col\":6}},{\"id\":\"practitioner-list\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Healthcare Practitioner\",\"col\":6}}]",
  "creation": "2026-07-31 14:59:44.670870",
  "custom_blocks": [],
  "docstatus": 0,
@@ -22,6 +22,9 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 2.0,
- "shortcuts": [],
+ "shortcuts": [
+  {"doc_view": "", "label": "Doctor Dashboard", "link_to": "doctor-dashboard", "type": "Page"},
+  {"doc_view": "List", "label": "Healthcare Practitioner", "link_to": "Healthcare Practitioner", "type": "DocType"}
+ ],
  "title": "Doctor"
 }

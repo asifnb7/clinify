@@ -37,6 +37,11 @@ def _build_invoice_html():
         prescription_html,
         flags=re.DOTALL,
     )
+    branding_style_match = re.search(
+        r'(<style class="clinify-tenant-branding">.*?</style>)',
+        prescription_html,
+        flags=re.DOTALL,
+    )
 
     if not style_match:
         frappe.throw(
@@ -48,8 +53,13 @@ def _build_invoice_html():
             "Unable to extract the approved Clinify Prescription header."
         )
 
+    if not branding_style_match:
+        frappe.throw(
+            "Unable to extract the tenant branding styles for the Clinify Invoice."
+        )
+
     style = style_match.group(1)
-    header = header_match.group(1)
+    header = branding_style_match.group(1) + "\n" + header_match.group(1)
 
     invoice_body = r'''    <style>
         .clinify-invoice-meta .invoice-meta-item {
@@ -84,7 +94,10 @@ def _build_invoice_html():
     </style>
 
 
-    {% set clinic = frappe.get_doc("Clinic Configuration", "Clinic Configuration") %}
+    {% set print_branding = get_print_branding() %}
+    {% set clinic = print_branding.clinic %}
+    {% set clinic_brand_color = print_branding.brand_primary_color %}
+    {% set platform_footer = print_branding.platform_footer.invoice %}
     {% set patient = frappe.get_doc("Patient", doc.customer)
         if doc.customer else None %}
 
@@ -343,7 +356,7 @@ def _build_invoice_html():
     </div>
 
     <div class="invoice-footer">
-        Thank you for choosing Clinify.
+        Thank you for choosing {{ frappe.utils.escape_html(clinic.clinic_name or "our clinic") }}.
     </div>
 
     <div class="signature-area">
@@ -353,6 +366,14 @@ def _build_invoice_html():
     </div>
 
     </div>
+'''
+    invoice_body += r'''
+
+    {% if platform_footer.enabled and platform_footer.mode != "None" and platform_footer.text %}
+    <div class="clinify-attribution clinify-attribution-{{ platform_footer.alignment_class }} clinify-attribution-{{ platform_footer.weight_class }}">
+        {{ frappe.utils.escape_html(platform_footer.text) }}
+    </div>
+    {% endif %}
 '''
 
     header_with_placeholder = header

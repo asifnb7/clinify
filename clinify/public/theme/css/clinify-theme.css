@@ -335,3 +335,20 @@ select {
         background-color: transparent !important;
     }
 }
+
+.clinify-platform-attribution {
+    align-items: center;
+    color: var(--text-muted);
+    display: flex;
+    font-size: 10px;
+    line-height: 1;
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+    .clinify-platform-attribution {
+        font-size: 9px;
+        padding: 0 4px;
+    }
+}

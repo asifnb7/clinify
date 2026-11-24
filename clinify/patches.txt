@@ -10,3 +10,5 @@ clinify.patches.reconcile_encounter_dental_metadata
 clinify.patches.install_clinify_prescription_print_format_v6
 clinify.patches.fix_drug_prescription_dosage_form_reqd
 clinify.patches.fix_clinify_prescription_print_format_parity
+clinify.patches.migrate_print_footer_ownership
+clinify.patches.split_print_footer_settings_v1

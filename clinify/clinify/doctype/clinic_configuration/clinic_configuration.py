@@ -9,6 +9,22 @@ from frappe.model.document import Document
 
 class ClinicConfiguration(Document):
 	def validate(self):
+		legacy_platform_footer_fields = (
+			"platform_attribution_text",
+			"platform_attribution_position",
+		)
+		previous = frappe.get_single("Clinic Configuration") if not self.is_new() else None
+		if previous:
+			from clinify.saas.sso import _is_control_site
+
+			if not _is_control_site() and any(
+				self.get(fieldname) != previous.get(fieldname)
+				for fieldname in legacy_platform_footer_fields
+			):
+				frappe.throw(
+					"Print footer settings are managed by the Clinify platform."
+				)
+
 		if self.brand_primary_color and not re.fullmatch(
 			r"#[0-9A-Fa-f]{6}", self.brand_primary_color.strip()
 		):

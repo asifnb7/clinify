@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[]",
+ "content": "[{\"id\":\"lab-test\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Lab Test\",\"col\":6}},{\"id\":\"lab-test-template\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Lab Test Template\",\"col\":6}}]",
  "creation": "2026-07-31 14:59:44.715936",
  "custom_blocks": [],
  "docstatus": 0,
@@ -22,6 +22,9 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 4.0,
- "shortcuts": [],
+ "shortcuts": [
+  {"doc_view": "List", "label": "Lab Test", "link_to": "Lab Test", "type": "DocType"},
+  {"doc_view": "List", "label": "Lab Test Template", "link_to": "Lab Test Template", "type": "DocType"}
+ ],
  "title": "Laboratory"
 }

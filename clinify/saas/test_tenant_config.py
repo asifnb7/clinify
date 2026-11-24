@@ -1,3 +1,4 @@
+import ast
 import unittest
 from unittest.mock import patch
 
@@ -55,7 +56,7 @@ class TestTenantConfigPropagation(unittest.TestCase):
             orchestrator._configure_tenant_site_config(SITE)
 
         self.assertEqual(
-            calls,
+            calls[:3],
             [
                 [
                     "--site",
@@ -68,6 +69,12 @@ class TestTenantConfigPropagation(unittest.TestCase):
                 ["--site", SITE, "set-config", "CLINIFY_CONTROL_URL", "https://control.salniz.com"],
             ],
         )
+        footer_call = calls[-1]
+        self.assertEqual(footer_call[:4], ["--site", SITE, "set-config", "CLINIFY_PRINT_FOOTER_CONFIG"])
+        self.assertEqual(footer_call[-1], "--parse")
+        projection = ast.literal_eval(footer_call[4])
+        self.assertEqual(projection["prescription"]["mode"], "Powered by Clinify")
+        self.assertEqual(projection["invoice"]["mode"], "Powered by Clinify")
 
     def test_the_signing_secret_is_never_propagated(self):
         calls = []
@@ -147,7 +154,64 @@ class TestTenantConfigPropagation(unittest.TestCase):
         ):
             orchestrator._configure_tenant_site_config(SITE)
 
-        self.assertEqual(calls, [])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][3], "CLINIFY_PRINT_FOOTER_CONFIG")
+        projection = ast.literal_eval(calls[0][4])
+        self.assertEqual(projection["prescription"]["text"], "Powered by Clinify")
+
+    def test_per_tenant_footer_projection_is_not_shared(self):
+        from clinify.saas.print_footer_config import footer_config_from_tenant
+
+        tenant_a = footer_config_from_tenant({
+            "print_footer_mode": "Powered by Clinify",
+            "print_footer_alignment": "Center",
+        })
+        tenant_b = footer_config_from_tenant({
+            "print_footer_mode": "Custom Message",
+            "print_footer_text": "Clinic B",
+            "print_footer_alignment": "Right",
+            "show_footer_on_prescription": 1,
+            "invoice_footer_mode": "Custom Message",
+            "invoice_footer_text": "Clinic B",
+            "invoice_footer_alignment": "Right",
+            "show_footer_on_invoice": 0,
+        })
+
+        self.assertEqual(tenant_a["prescription"]["text"], "Powered by Clinify")
+        self.assertEqual(tenant_a["prescription"]["alignment"], "Center")
+        self.assertEqual(tenant_b["prescription"]["text"], "Clinic B")
+        self.assertEqual(tenant_b["prescription"]["alignment"], "Right")
+        self.assertEqual(tenant_b["invoice"]["text"], "Clinic B")
+        self.assertFalse(tenant_b["invoice"]["enabled"])
+
+    def test_tenant_creation_projects_explicit_footer_fields(self):
+        calls = []
+        tenant = {
+            "print_footer_mode": "Custom",
+            "print_footer_text": "Custom Clinic Message",
+            "print_footer_alignment": "Right",
+            "print_footer_bold": 0,
+            "show_footer_on_prescription": 1,
+            "show_footer_on_invoice": 0,
+            "invoice_footer_mode": "Custom Message",
+            "invoice_footer_text": "Invoice only message",
+            "invoice_footer_alignment": "Left",
+            "invoice_footer_bold": 1,
+        }
+
+        with patch.object(sso, "_setting", return_value=None), patch.object(
+            orchestrator, "_run_bench", side_effect=calls.append
+        ):
+            orchestrator._configure_tenant_site_config(SITE, tenant=tenant)
+
+        footer_call = calls[0]
+        self.assertEqual(footer_call[3], "CLINIFY_PRINT_FOOTER_CONFIG")
+        projection = ast.literal_eval(footer_call[4])
+        self.assertEqual(projection["prescription"]["text"], "Custom Clinic Message")
+        self.assertEqual(projection["prescription"]["alignment"], "Right")
+        self.assertFalse(projection["invoice"]["enabled"])
+        self.assertEqual(projection["invoice"]["text"], "Invoice only message")
+        self.assertEqual(projection["invoice"]["alignment"], "Left")
 
 
 if __name__ == "__main__":
